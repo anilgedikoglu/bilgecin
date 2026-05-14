@@ -114,26 +114,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               // Start button
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
+                padding: const EdgeInsets.symmetric(horizontal: 56),
                 child: SizedBox(
                   width: double.infinity,
-                  height: 72,
+                  height: 50,
                   child: _loading
                       ? _loadingButton()
                       : FilledButton(
                           onPressed: _startGame,
                           style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
                           ),
                           child: const Text('BİR KARAKTER DÜŞÜNDÜM',
-                              style: TextStyle(fontSize: 16, letterSpacing: 1.5, fontWeight: FontWeight.w800)),
+                              style: TextStyle(fontSize: 14, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
                         ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
             ],
           ),
         ),
