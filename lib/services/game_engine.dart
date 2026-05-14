@@ -82,6 +82,27 @@ class GameEngine {
   int _consecutiveDontKnow = 0;
   final Map<int, int> _groupCooldownAt = {}; // group → questionCount at dontKnow
 
+  // Bağlam bayrakları — cevaplanan temel sorulara göre set edilir
+  bool? _knownFictional; // true=kurgusal, false=gerçek, null=bilinmiyor
+  bool? _knownMale;      // true=erkek, false=kadın, null=bilinmiyor
+
+  // Kurgusal karakterler için anlamsız attribute'lar
+  static const Set<String> _fictionalIrrelevant = {
+    'age_under_35', 'age_over_50', 'age_under_25', 'age_over_40',
+    'age_over_60',  'age_over_70',
+    'born_after_1990', 'born_after_1980', 'born_before_1960',
+    'is_married', 'has_children',
+    'is_alive', 'is_historical',
+    'height_tall', 'height_short',
+    'is_youtuber', 'is_politician',
+  };
+
+  // Gerçek kişiler için anlamsız attribute'lar
+  static const Set<String> _realPersonIrrelevant = {
+    'is_villain', 'is_superhero',
+    'from_movie', 'from_anime', 'from_tv_series', 'from_fiction_media',
+  };
+
   final List<String>        _attributes;
   final Map<String, String> _questions;
 
@@ -423,8 +444,14 @@ class GameEngine {
     final cooldown   = _cooldownPenalty(group);
     final privPenalty = _privateLifePenalty(attr);
 
+    // Bağlam baskılaması: cevaplanan temel sorulara göre alakasız attribute'ları bastır
+    double contextPenalty = 1.0;
+    if (_knownFictional == true  && _fictionalIrrelevant.contains(attr))   contextPenalty = 0.02;
+    if (_knownFictional == false && _realPersonIrrelevant.contains(attr))  contextPenalty = 0.02;
+    if (_knownMale == false      && attr == 'has_beard')                   contextPenalty = 0.01;
+
     return ig * effectiveBoost * knowability * dynMult
-        * diversityBoost * cooldown * privPenalty;
+        * diversityBoost * cooldown * privPenalty * contextPenalty;
   }
 
   // ── Differentiator question selection ─────────────────────────────────────
@@ -528,6 +555,22 @@ class GameEngine {
     _asked.add(attr);
     _history.add(AskedQuestion(attr, _questions[attr] ?? attr, ans));
     _questionCount++;
+
+    // Bağlam bayraklarını güncelle
+    if (attr == 'is_fictional') {
+      if (ans == AnswerType.yes || ans == AnswerType.probably) {
+        _knownFictional = true;
+      } else if (ans == AnswerType.no || ans == AnswerType.probablyNot) {
+        _knownFictional = false;
+      }
+    }
+    if (attr == 'is_male') {
+      if (ans == AnswerType.yes || ans == AnswerType.probably) {
+        _knownMale = true;
+      } else if (ans == AnswerType.no || ans == AnswerType.probablyNot) {
+        _knownMale = false;
+      }
+    }
 
     if (ans == AnswerType.dontKnow) {
       _consecutiveDontKnow++;
