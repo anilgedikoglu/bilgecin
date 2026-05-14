@@ -83,8 +83,9 @@ class GameEngine {
   final Map<int, int> _groupCooldownAt = {}; // group → questionCount at dontKnow
 
   // Bağlam bayrakları — cevaplanan temel sorulara göre set edilir
-  bool? _knownFictional; // true=kurgusal, false=gerçek, null=bilinmiyor
-  bool? _knownMale;      // true=erkek, false=kadın, null=bilinmiyor
+  bool? _knownFictional;  // true=kurgusal, false=gerçek, null=bilinmiyor
+  bool? _knownMale;       // true=erkek, false=kadın, null=bilinmiyor
+  bool? _knownHistorical; // true=tarihi figür → modern teknoloji soruları anlamsız
 
   // Kurgusal karakterler için anlamsız attribute'lar
   static const Set<String> _fictionalIrrelevant = {
@@ -95,6 +96,15 @@ class GameEngine {
     'is_alive', 'is_historical',
     'height_tall', 'height_short',
     'is_youtuber', 'is_politician',
+    // Gerçek dünyaya özgü — kurgusal karakterlere uygulanamaz
+    'spotify_over_10m', 'spotify_over_50m',
+    'played_for_galatasaray', 'played_for_fenerbahce',
+    'played_for_besiktas', 'played_for_real_madrid', 'played_for_big_three',
+    'won_ballon_dor', 'won_oscar', 'won_grammy', 'won_major_award',
+    'divorced', 'has_famous_partner',
+    'likes_strawberry_milk', 'food_kebap', 'food_pizza', 'food_sushi', 'food_baklava',
+    'burc_aslan', 'burc_akrep', 'burc_kova', 'burc_boga', 'burc_yengec',
+    'burc_balik', 'burc_koc', 'burc_ikizler', 'burc_basak', 'burc_oglak', 'burc_terazi',
   };
 
   // Gerçek kişiler için anlamsız attribute'lar
@@ -103,11 +113,23 @@ class GameEngine {
     'from_movie', 'from_anime', 'from_tv_series', 'from_fiction_media',
   };
 
+  // Tarihi figürler için anlamsız attribute'lar (internet çağı öncesi)
+  static const Set<String> _historicalIrrelevant = {
+    'is_youtuber',
+    'spotify_over_10m',
+    'played_for_galatasaray', 'played_for_fenerbahce',
+    'played_for_besiktas', 'played_for_real_madrid', 'played_for_big_three',
+  };
+
+  // Bu temel attribute'lar için soft scoring değil, hard filter uygulanır.
+  // Kullanıcı kesin YES/NO verirse adaylar direkt elenir; puan birikimi olmaz.
+  static const Set<String> _hardFilterAttrs = {'is_fictional', 'is_male', 'is_turkish'};
+
   final List<String>        _attributes;
   final Map<String, String> _questions;
 
-  static const int    maxQuestions              = 20;
-  static const double eliminationThreshold      = -3.2;
+  static const int    maxQuestions              = 25;
+  static const double eliminationThreshold      = -1.5;
   static const int    autoGuessAt               = 3;
   static const int    differentiatorAt          = 8;
   static const int    _groupCooldownLen         = 3;
@@ -126,20 +148,31 @@ class GameEngine {
     'is_politician', 'is_rapper', 'is_youtuber',
     'is_director', 'is_model', 'is_comedian', 'is_tv_host',
     'is_musician', 'is_athlete', 'is_in_entertainment',
-    // Fictional traits (group 2b → group 7)
+    // Fictional traits (group 7)
     'is_villain', 'is_superhero',
     // Source (group 2)
     'from_movie', 'from_anime', 'from_tv_series', 'from_fiction_media',
     // Personal (group 3)
     'is_alive', 'is_historical', 'is_married', 'has_children',
+    'divorced', 'has_famous_partner', 'has_pet',
     // Physical (group 4)
     'has_beard', 'wears_glasses', 'height_tall', 'height_short',
+    'is_bald', 'has_tattoo',
     // Age (group 5)
     'age_under_35', 'age_over_50', 'age_under_25',
     'age_over_40',  'age_over_60', 'age_over_70',
     'born_after_1990', 'born_after_1980', 'born_before_1960',
-    // Fame (group 6)
-    'popularity_high', 'very_popular',
+    // Fame/Era (group 6)
+    'popularity_high', 'very_popular', 'known_for_80s',
+    // Sports & Awards (group 9)
+    'played_for_galatasaray', 'played_for_fenerbahce',
+    'played_for_besiktas', 'played_for_real_madrid', 'played_for_big_three',
+    'won_ballon_dor', 'won_oscar', 'won_grammy', 'won_major_award',
+    'spotify_over_10m',
+    // Trivia (group 10)
+    'burc_aslan', 'burc_akrep', 'burc_kova', 'burc_boga', 'burc_yengec',
+    'burc_balik', 'burc_koc', 'burc_ikizler', 'burc_basak', 'burc_oglak', 'burc_terazi',
+    'likes_strawberry_milk', 'food_kebap', 'food_pizza', 'food_sushi',
   ];
 
   // ── Question texts ─────────────────────────────────────────────────────────
@@ -185,8 +218,44 @@ class GameEngine {
     'born_after_1990':     'Bu karakter 1990 sonrası doğdu mu?',
     'born_after_1980':     'Bu karakter 1980 sonrası doğdu mu?',
     'born_before_1960':    'Bu karakter 1960 öncesi doğdu mu?',
-    'popularity_high':     'Bu karakter çok popüler mi?',
-    'very_popular':        'Bu karakter neredeyse herkes tarafından tanınır mı?',
+    'popularity_high':       'Bu karakter çok popüler mi?',
+    'very_popular':          'Bu karakter neredeyse herkes tarafından tanınır mı?',
+    'known_for_80s':         'Bu karakter 80\'li yıllarla özdeşleşmiş mi?',
+    // Personal extras
+    'divorced':              'Bu karakter boşanmış mı?',
+    'has_famous_partner':    'Bu karakterin ünlü bir partneri/eşi var mı?',
+    'has_pet':               'Bu karakterin evcil hayvanı (köpek veya kedi) var mı?',
+    // Physical extras
+    'is_bald':               'Bu karakter kel veya belirgin şekilde saçsız mı?',
+    'has_tattoo':            'Bu karakterin dövmesi var mı?',
+    // Sports & Awards
+    'played_for_galatasaray':'Galatasaray\'da oynadı mı?',
+    'played_for_fenerbahce': 'Fenerbahçe\'de oynadı mı?',
+    'played_for_besiktas':   'Beşiktaş\'ta oynadı mı?',
+    'played_for_real_madrid':'Real Madrid\'de oynadı mı?',
+    'played_for_big_three':  'Türkiye\'deki büyük üçten birinde oynadı mı?',
+    'won_ballon_dor':        'Ballon d\'Or kazandı mı?',
+    'won_oscar':             'Oscar ödülü kazandı mı?',
+    'won_grammy':            'Grammy ödülü kazandı mı?',
+    'won_major_award':       'Oscar, Grammy veya Ballon d\'Or gibi prestijli bir ödülü var mı?',
+    'spotify_over_10m':      'Spotify\'da 10 milyon üzerinde aylık dinleyicisi var mı?',
+    // Trivia / Zodiac
+    'burc_aslan':   'Burcu Aslan mı?',
+    'burc_akrep':   'Burcu Akrep mi?',
+    'burc_kova':    'Burcu Kova mı?',
+    'burc_boga':    'Burcu Boğa mı?',
+    'burc_yengec':  'Burcu Yengeç mi?',
+    'burc_balik':   'Burcu Balık mı?',
+    'burc_koc':     'Burcu Koç mu?',
+    'burc_ikizler': 'Burcu İkizler mi?',
+    'burc_basak':   'Burcu Başak mı?',
+    'burc_oglak':   'Burcu Oğlak mı?',
+    'burc_terazi':  'Burcu Terazi mi?',
+    // Trivia / Food
+    'likes_strawberry_milk': 'Çilekli sütü sevebilir mi?',
+    'food_kebap':  'Favori yemeği kebap olabilir mi?',
+    'food_pizza':  'Favori yemeği pizza olabilir mi?',
+    'food_sushi':  'Favori yemeği sushi olabilir mi?',
   };
 
   // ── Attribute metadata ─────────────────────────────────────────────────────
@@ -234,8 +303,43 @@ class GameEngine {
     'born_after_1990':     _AttrMeta(5, 0.60),
     'born_after_1980':     _AttrMeta(5, 0.60),
     'born_before_1960':    _AttrMeta(5, 0.65),
-    'popularity_high':     _AttrMeta(6, 0.85),
-    'very_popular':        _AttrMeta(6, 0.90),
+    'popularity_high':       _AttrMeta(6, 0.85),
+    'very_popular':          _AttrMeta(6, 0.90),
+    'known_for_80s':         _AttrMeta(6, 0.72),
+    // Personal extras (group 3)
+    'divorced':              _AttrMeta(3, 0.55, isPrivateLife: true),
+    'has_famous_partner':    _AttrMeta(3, 0.60, isPrivateLife: true),
+    'has_pet':               _AttrMeta(3, 0.40, isPrivateLife: true),
+    // Physical extras (group 4)
+    'is_bald':               _AttrMeta(4, 0.90),
+    'has_tattoo':            _AttrMeta(4, 0.75),
+    // Sports & Awards (group 9)
+    'played_for_galatasaray':_AttrMeta(9, 0.82),
+    'played_for_fenerbahce': _AttrMeta(9, 0.82),
+    'played_for_besiktas':   _AttrMeta(9, 0.82),
+    'played_for_real_madrid':_AttrMeta(9, 0.78),
+    'played_for_big_three':  _AttrMeta(9, 0.82),
+    'won_ballon_dor':        _AttrMeta(9, 0.88),
+    'won_oscar':             _AttrMeta(9, 0.85),
+    'won_grammy':            _AttrMeta(9, 0.82),
+    'won_major_award':       _AttrMeta(9, 0.85),
+    'spotify_over_10m':      _AttrMeta(9, 0.65),
+    // Trivia (group 10)
+    'burc_aslan':            _AttrMeta(10, 0.40),
+    'burc_akrep':            _AttrMeta(10, 0.40),
+    'burc_kova':             _AttrMeta(10, 0.40),
+    'burc_boga':             _AttrMeta(10, 0.40),
+    'burc_yengec':           _AttrMeta(10, 0.40),
+    'burc_balik':            _AttrMeta(10, 0.40),
+    'burc_koc':              _AttrMeta(10, 0.40),
+    'burc_ikizler':          _AttrMeta(10, 0.40),
+    'burc_basak':            _AttrMeta(10, 0.40),
+    'burc_oglak':            _AttrMeta(10, 0.40),
+    'burc_terazi':           _AttrMeta(10, 0.40),
+    'likes_strawberry_milk': _AttrMeta(10, 0.25),
+    'food_kebap':            _AttrMeta(10, 0.35),
+    'food_pizza':            _AttrMeta(10, 0.35),
+    'food_sushi':            _AttrMeta(10, 0.35),
   };
 
   // Phase-boost [group][phase]:
@@ -255,6 +359,8 @@ class GameEngine {
     [1.00, 1.00, 1.00], // 6 fame
     [1.30, 1.40, 1.20], // 7 fictional-traits (villain/superhero)
     [2.40, 1.10, 0.80], // 8 nationality (is_turkish) — sorulsun erken, gereksiz olunca düş
+    [0.30, 0.85, 1.80], // 9 sports/awards/music specific — precision phase'de çok değerli
+    [0.10, 0.40, 1.00], // 10 trivia (zodiac, food) — sadece differentiator olarak
   ];
 
   // 5-answer probability model.
@@ -448,6 +554,7 @@ class GameEngine {
     double contextPenalty = 1.0;
     if (_knownFictional == true  && _fictionalIrrelevant.contains(attr))   contextPenalty = 0.02;
     if (_knownFictional == false && _realPersonIrrelevant.contains(attr))  contextPenalty = 0.02;
+    if (_knownHistorical == true && _historicalIrrelevant.contains(attr))  contextPenalty = 0.02;
     if (_knownMale == false      && attr == 'has_beard')                   contextPenalty = 0.01;
 
     return ig * effectiveBoost * knowability * dynMult
@@ -494,7 +601,14 @@ class GameEngine {
       final cooldown    = _cooldownPenalty(group);
       final privPenalty = _privateLifePenalty(attr);
 
-      final s = ig * knowability * cooldown * privPenalty;
+      // Differentiator da context penalty uygular — asıl bug buradan kaynaklanıyordu
+      double ctxPenalty = 1.0;
+      if (_knownFictional == true  && _fictionalIrrelevant.contains(attr))  ctxPenalty = 0.02;
+      if (_knownFictional == false && _realPersonIrrelevant.contains(attr)) ctxPenalty = 0.02;
+      if (_knownHistorical == true && _historicalIrrelevant.contains(attr)) ctxPenalty = 0.02;
+      if (_knownMale == false      && attr == 'has_beard')                  ctxPenalty = 0.01;
+
+      final s = ig * knowability * cooldown * privPenalty * ctxPenalty;
       if (s > bestScore) {
         bestScore = s;
         bestAttr  = attr;
@@ -571,6 +685,13 @@ class GameEngine {
         _knownMale = false;
       }
     }
+    if (attr == 'is_historical') {
+      if (ans == AnswerType.yes || ans == AnswerType.probably) {
+        _knownHistorical = true;
+      } else if (ans == AnswerType.no || ans == AnswerType.probablyNot) {
+        _knownHistorical = false;
+      }
+    }
 
     if (ans == AnswerType.dontKnow) {
       _consecutiveDontKnow++;
@@ -584,15 +705,28 @@ class GameEngine {
 
     final w = ans.weight;
     if (w != 0.0) {
-      for (final c in _candidates) {
-        final hasAttr = _attrVal(c, attr) == 1;
-        _scores[c] = (_scores[c] ?? 0.0) + w * (hasAttr ? 1.0 : -1.0);
+      if (_hardFilterAttrs.contains(attr) &&
+          (ans == AnswerType.yes || ans == AnswerType.no)) {
+        // Temel özellikler için hard filter: eşleşmeyenler direkt elenir,
+        // puan birikimi olmadığı için ilerleyen sorularda yanlış karakter
+        // buffer'lı puan taşımaz.
+        final want = ans == AnswerType.yes ? 1 : 0;
+        _candidates = _candidates.where((c) => _attrVal(c, attr) == want).toList();
+      } else {
+        // Asimetrik soft scoring: eşleşme +0.6, uyuşmazlık -1.4
+        // Yanlış karakterler birkaç uyuşmazlıkta eşiğin altına düşer.
+        for (final c in _candidates) {
+          final hasAttr  = _attrVal(c, attr) == 1;
+          final sign     = hasAttr ? 1.0 : -1.0;
+          final isMatch  = w * sign > 0;
+          final magnitude = isMatch ? 0.6 : 1.4;
+          _scores[c] = (_scores[c] ?? 0.0) + w * sign * magnitude;
+        }
+        _candidates = _candidates
+            .where((c) => (_scores[c] ?? 0.0) > eliminationThreshold)
+            .toList();
       }
     }
-
-    _candidates = _candidates
-        .where((c) => (_scores[c] ?? 0.0) > eliminationThreshold)
-        .toList();
 
     if (_questionCount < maxQuestions && _candidates.length > 1) {
       _currentAttribute = _selectBestQuestion();
@@ -648,9 +782,6 @@ class GameEngine {
 
     // Clear lead over second place
     if (top[1].value > 0 && top[0].value / top[1].value >= 5.0) return true;
-
-    // Late game — force a decision rather than exhausting all questions
-    if (_questionCount >= 16) return true;
 
     return false;
   }

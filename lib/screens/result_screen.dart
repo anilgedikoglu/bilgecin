@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/game_engine.dart';
-import '../models/character.dart';
+import '../services/universal_engine.dart';
+import '../models/any_result.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 
 class ResultScreen extends StatefulWidget {
-  final GameEngine engine;
+  final UniversalEngine engine;
   const ResultScreen({super.key, required this.engine});
 
   @override
@@ -19,11 +18,6 @@ class _ResultScreenState extends State<ResultScreen>
   late Animation<double> _scaleAnim;
   late Animation<double> _fadeAnim;
 
-  bool? _wasCorrect;
-  int _score = 0;
-  final _textController = TextEditingController();
-  bool _showAlternatives = false;
-
   @override
   void initState() {
     super.initState();
@@ -32,48 +26,14 @@ class _ResultScreenState extends State<ResultScreen>
       duration: const Duration(milliseconds: 600),
     );
     _scaleAnim = CurvedAnimation(parent: _revealCtrl, curve: Curves.elasticOut);
-    _fadeAnim = CurvedAnimation(parent: _revealCtrl, curve: Curves.easeOut);
+    _fadeAnim  = CurvedAnimation(parent: _revealCtrl, curve: Curves.easeOut);
     _revealCtrl.forward();
   }
 
   @override
   void dispose() {
     _revealCtrl.dispose();
-    _textController.dispose();
     super.dispose();
-  }
-
-  int _calcScore(int questionCount) {
-    if (questionCount <= 5) return 100;
-    if (questionCount <= 10) return 80;
-    if (questionCount <= 15) return 60;
-    if (questionCount <= 20) return 40;
-    return 20;
-  }
-
-  Future<void> _onCorrect() async {
-    final score = _calcScore(widget.engine.questionCount);
-    setState(() {
-      _wasCorrect = true;
-      _score = score;
-    });
-    await _saveScore(score);
-  }
-
-  Future<void> _onWrong() async {
-    setState(() {
-      _wasCorrect = false;
-      _score = 0;
-    });
-    await _saveScore(0);
-  }
-
-  Future<void> _saveScore(int score) async {
-    final prefs = await SharedPreferences.getInstance();
-    final high = prefs.getInt('high_score') ?? 0;
-    if (score > high) await prefs.setInt('high_score', score);
-    final played = (prefs.getInt('games_played') ?? 0) + 1;
-    await prefs.setInt('games_played', played);
   }
 
   void _playAgain() {
@@ -88,10 +48,49 @@ class _ResultScreenState extends State<ResultScreen>
     );
   }
 
+  void _showAlternativesSheet() {
+    final top5 = widget.engine.top5Results;
+    if (top5.length <= 1) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A0A3C),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              'Diğer Tahminler',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 13,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...top5.skip(1).map((r) => _altCard(r)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final guess = widget.engine.bestGuess;
-    final q = widget.engine.questionCount;
+    final guess = widget.engine.bestResult;
 
     return Scaffold(
       body: Container(
@@ -103,33 +102,30 @@ class _ResultScreenState extends State<ResultScreen>
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 24),
-                FadeTransition(
-                  opacity: _fadeAnim,
-                  child: ScaleTransition(
-                    scale: _scaleAnim,
-                    child: _buildGuessCard(guess, q),
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: ScaleTransition(
+                      scale: _scaleAnim,
+                      child: _buildGuessCard(guess),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 28),
-                if (_wasCorrect == null) ...[
-                  _buildConfirmQuestion(guess),
-                ] else ...[
-                  _buildResultBanner(),
-                  const SizedBox(height: 20),
-                  if (_wasCorrect == false) _buildWrongSection(),
-                  const SizedBox(height: 24),
-                  _buildPlayAgainButton(),
-                ],
-                const SizedBox(height: 16),
-                _buildAlternativesSection(),
-              ],
-            ),
+              ),
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: _buildNewGuessButton(),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -137,30 +133,44 @@ class _ResultScreenState extends State<ResultScreen>
   }
 
   Widget _buildHeader() {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: _playAgain,
-          icon: const Icon(Icons.home_rounded, color: Colors.white54),
-        ),
-        const Expanded(
-          child: Text(
-            'TAHMİNİM',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 3,
-              color: Colors.white,
+    final top5 = widget.engine.top5Results;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: _playAgain,
+            icon: const Icon(Icons.home_rounded, color: Colors.white54),
+          ),
+          const Expanded(
+            child: Text(
+              'TAHMİNİM',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 3,
+                color: Colors.white,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 48),
-      ],
+          if (top5.length > 1)
+            IconButton(
+              onPressed: _showAlternativesSheet,
+              icon: Icon(
+                Icons.format_list_numbered_rounded,
+                color: Colors.white.withOpacity(0.18),
+                size: 22,
+              ),
+            )
+          else
+            const SizedBox(width: 48),
+        ],
+      ),
     );
   }
 
-  Widget _buildGuessCard(Character guess, int questionCount) {
+  Widget _buildGuessCard(AnyResult guess) {
     final color = _categoryColor(guess.category);
     return Container(
       width: double.infinity,
@@ -169,10 +179,7 @@ class _ResultScreenState extends State<ResultScreen>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.25),
-            AppTheme.bgCard,
-          ],
+          colors: [color.withOpacity(0.25), AppTheme.bgCard],
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: color.withOpacity(0.5), width: 1.5),
@@ -185,8 +192,8 @@ class _ResultScreenState extends State<ResultScreen>
         ],
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Avatar
           Container(
             width: 100,
             height: 100,
@@ -199,7 +206,7 @@ class _ResultScreenState extends State<ResultScreen>
             ),
             child: Center(
               child: Text(
-                guess.name.substring(0, 1).toUpperCase(),
+                guess.name.isNotEmpty ? guess.name.substring(0, 1).toUpperCase() : '?',
                 style: const TextStyle(
                   fontSize: 42,
                   fontWeight: FontWeight.w900,
@@ -209,16 +216,14 @@ class _ResultScreenState extends State<ResultScreen>
             ),
           ),
           const SizedBox(height: 16),
-          // Intro text
           Text(
-            'Düşündüğünüz kişi...',
+            guess.isPerson ? 'Düşündüğünüz kişi...' : 'Düşündüğünüz şey...',
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withOpacity(0.55),
             ),
           ),
           const SizedBox(height: 6),
-          // Name
           Text(
             guess.name,
             textAlign: TextAlign.center,
@@ -230,278 +235,64 @@ class _ResultScreenState extends State<ResultScreen>
             ),
           ),
           const SizedBox(height: 8),
-          // Category badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(0.6)),
-            ),
-            child: Text(
-              guess.category,
-              style: TextStyle(
-                  fontSize: 13, color: color, fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Nationality
-          Text(
-            '${guess.nationality} • ${guess.knownFor}',
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Stats row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _miniStat('⚡', '$questionCount soru'),
-              const SizedBox(width: 16),
-              _miniStat('⭐', '${guess.popularityScore}/100'),
-              const SizedBox(width: 16),
-              _miniStat('📅', '${guess.birthYear}'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniStat(String emoji, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        '$emoji $text',
-        style: const TextStyle(fontSize: 12, color: Colors.white70),
-      ),
-    );
-  }
-
-  Widget _buildConfirmQuestion(Character guess) {
-    return Column(
-      children: [
-        Text(
-          'Bu doğru mu?',
-          style: TextStyle(
-            fontSize: 17,
-            color: Colors.white.withOpacity(0.7),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _bigButton(
-                label: '✅  Evet, doğru!',
-                color: AppTheme.colorYes,
-                onTap: _onCorrect,
+          if (guess.category.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withOpacity(0.6)),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _bigButton(
-                label: '❌  Hayır, yanlış',
-                color: AppTheme.colorNo,
-                onTap: _onWrong,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _bigButton(
-      {required String label,
-      required Color color,
-      required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.6), width: 1.5),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResultBanner() {
-    if (_wasCorrect == true) {
-      final score = _score;
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.colorYes.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.colorYes.withOpacity(0.5)),
-        ),
-        child: Column(
-          children: [
-            const Text('🎉', style: TextStyle(fontSize: 42)),
-            const SizedBox(height: 8),
-            const Text(
-              'Buldum!',
-              style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Puan: $score',
-              style: const TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.accentGold,
-              ),
-            ),
-            Text(
-              '${widget.engine.questionCount} soruda bulundu',
-              style: TextStyle(
-                  fontSize: 14, color: Colors.white.withOpacity(0.6)),
-            ),
-          ],
-        ),
-      );
-    } else {
-      return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildWrongSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _textController,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Kimin düşündüğünüzü yazın...',
-            hintStyle: TextStyle(color: Colors.white38),
-            filled: true,
-            fillColor: AppTheme.bgCard,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide:
-                  BorderSide(color: AppTheme.accent.withOpacity(0.6)),
-            ),
-            prefixIcon:
-                const Icon(Icons.person_rounded, color: Colors.white38),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              // In a real app, this would send feedback to improve the model
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Geri bildirim için teşekkürler! "${_textController.text}"',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  backgroundColor: AppTheme.bgCard,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              );
-            },
-            icon: const Icon(Icons.send_rounded, size: 18),
-            label: const Text('Gönder'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.accent,
-              side: BorderSide(color: AppTheme.accent.withOpacity(0.5)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlayAgainButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 58,
-      child: FilledButton.icon(
-        onPressed: _playAgain,
-        icon: const Icon(Icons.refresh_rounded, size: 24),
-        label: const Text(
-          'TEKRAR OYNA',
-          style: TextStyle(fontSize: 17, letterSpacing: 1.5),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAlternativesSection() {
-    final top5 = widget.engine.top5;
-    if (top5.length <= 1) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: () =>
-              setState(() => _showAlternatives = !_showAlternatives),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Diğer Tahminler',
+              child: Text(
+                guess.category,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.4), fontSize: 13),
+                  fontSize: 13,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              Icon(
-                _showAlternatives
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-                color: Colors.white38,
-              ),
-            ],
-          ),
-        ),
-        if (_showAlternatives) ...[
+            ),
           const SizedBox(height: 8),
-          ...top5.skip(1).map((c) => _altCard(c)),
+          if (guess.description.isNotEmpty)
+            Text(
+              guess.description,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.5),
+              ),
+            ),
         ],
-      ],
+      ),
     );
   }
 
-  Widget _altCard(Character c) {
-    final color = _categoryColor(c.category);
+  Widget _buildNewGuessButton() {
+    return Center(
+      child: SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: FilledButton.icon(
+          onPressed: _playAgain,
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+          icon: const Icon(Icons.auto_awesome_rounded, size: 22),
+          label: const Text(
+            'YENİ TAHMİN',
+            style: TextStyle(fontSize: 17, letterSpacing: 2, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _altCard(AnyResult r) {
+    final color = _categoryColor(r.category);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
@@ -517,9 +308,12 @@ class _ResultScreenState extends State<ResultScreen>
             radius: 22,
             backgroundColor: color.withOpacity(0.25),
             child: Text(
-              c.name.substring(0, 1),
+              r.name.isNotEmpty ? r.name.substring(0, 1) : '?',
               style: TextStyle(
-                  color: color, fontWeight: FontWeight.w900, fontSize: 18),
+                color: color,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -527,27 +321,25 @@ class _ResultScreenState extends State<ResultScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(c.name,
+                Text(r.name,
                     style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: Colors.white)),
-                Text(c.category,
+                Text(r.category,
                     style: TextStyle(
                         fontSize: 12,
                         color: Colors.white.withOpacity(0.5))),
               ],
             ),
           ),
-          Text(c.nationality,
-              style: TextStyle(
-                  fontSize: 12, color: Colors.white.withOpacity(0.35))),
         ],
       ),
     );
   }
 
   Color _categoryColor(String cat) {
+    // Person categories
     if (cat.contains('Futbolcu')) return const Color(0xFF22C55E);
     if (cat.contains('Müzisyen') || cat.contains('Şarkıcı')) return const Color(0xFFEC4899);
     if (cat.contains('Rapper')) return const Color(0xFF8B5CF6);
@@ -562,6 +354,18 @@ class _ResultScreenState extends State<ResultScreen>
     if (cat.contains('Tarihi') || cat.contains('Osmanlı')) return const Color(0xFFD97706);
     if (cat.contains('YouTuber')) return const Color(0xFFFF0000);
     if (cat.contains('Bilim') || cat.contains('Yazar')) return const Color(0xFF60A5FA);
+    // Thing categories
+    if (cat.contains('Hayvan')) return const Color(0xFF84CC16);
+    if (cat.contains('Yiyecek') || cat.contains('İçecek') || cat.contains('Bitki')) return const Color(0xFFFF8C42);
+    if (cat.contains('Taşıt') || cat.contains('Araç')) return const Color(0xFF38BDF8);
+    if (cat.contains('Yer') || cat.contains('Mekan') || cat.contains('Coğrafya')) return const Color(0xFF34D399);
+    if (cat.contains('Dijital') || cat.contains('Uygulama') || cat.contains('Oyun')) return const Color(0xFFA78BFA);
+    if (cat.contains('Marka')) return const Color(0xFFFBBF24);
+    if (cat.contains('Soyut') || cat.contains('Kavram') || cat.contains('Duygu')) return const Color(0xFFF472B6);
+    if (cat.contains('Ev') || cat.contains('Mobilya') || cat.contains('Mutfak')) return const Color(0xFF94A3B8);
+    if (cat.contains('Giyim') || cat.contains('Aksesuar')) return const Color(0xFFE879F9);
+    if (cat.contains('Doğa')) return const Color(0xFF4ADE80);
+    if (cat.contains('Uzay')) return const Color(0xFF818CF8);
     return AppTheme.accent;
   }
 }

@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../services/game_engine.dart';
+import '../services/game_engine.dart' show AnswerType, AnswerTypeExt;
+import '../services/universal_engine.dart';
 import 'result_screen.dart';
 
 // Single accent color picked from tamua.png palette (deep violet)
 const _kBtnColor = Color(0xFF7B35C0);
 
 class GameScreen extends StatefulWidget {
-  final GameEngine engine;
+  final UniversalEngine engine;
   const GameScreen({super.key, required this.engine});
 
   @override
@@ -84,7 +85,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _showDebugPanel() {
-    final top = widget.engine.rankedCandidates.take(10).toList();
+    final top = widget.engine.rankedResults;
     final count = widget.engine.candidateCount;
     showDialog(
       context: context,

@@ -43,6 +43,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/akinator_dataset.csv
+    - assets/things_dataset.csv
     - assets/tamuaicons.png
     - assets/tamua.png
 
