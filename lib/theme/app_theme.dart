@@ -29,7 +29,7 @@ class AppTheme {
         displayColor: Colors.white,
         fontFamily: 'Roboto',
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: _bgCard,
         elevation: 8,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
