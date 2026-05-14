@@ -97,13 +97,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               const SizedBox(height: 8),
               Text(
                 'Aklından bir şey geçir, ben bulacağım!',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
                   color: Colors.white.withOpacity(0.65),
                   letterSpacing: 0.5,
                 ),
               ),
-              const Spacer(flex: 1),
+              const SizedBox(height: 4),
+              Text(
+                'Aklını okuyacağım!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.white.withOpacity(0.65),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 32),
               // Start button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -117,17 +128,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 6),
                           ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('BİR KARAKTER DÜŞÜNDÜM',
-                                  style: TextStyle(fontSize: 16, letterSpacing: 1.5, fontWeight: FontWeight.w800)),
-                              SizedBox(height: 3),
-                              Text('Aklını Okuyacağım',
-                                  style: TextStyle(fontSize: 11, letterSpacing: 0.5)),
-                            ],
-                          ),
+                          child: const Text('BİR KARAKTER DÜŞÜNDÜM',
+                              style: TextStyle(fontSize: 16, letterSpacing: 1.5, fontWeight: FontWeight.w800)),
                         ),
                 ),
               ),
