@@ -476,6 +476,32 @@ class GameEngine {
     return bestAttr;
   }
 
+  // ── Zorunlu erken sorular ──────────────────────────────────────────────────
+  // PopBias bu üç soruyu bastırır; uniform IG ile sırala, popBias'tan bağımsız.
+
+  static const List<String> _mandatoryEarly = ['is_fictional', 'is_male', 'is_turkish'];
+
+  String _bestByUniformIG(List<String> attrs) {
+    final n = _candidates.length;
+    if (n == 0) return attrs.first;
+    String best   = attrs.first;
+    double bestIG = -1.0;
+    for (final attr in attrs) {
+      int hasCount = 0;
+      for (final c in _candidates) {
+        if (_attrVal(c, attr) == 1) hasCount++;
+      }
+      final pHas = hasCount / n;
+      final pNot = 1.0 - pHas;
+      if (pHas < 1e-9 || pNot < 1e-9) continue;
+      double ig = 0.0;
+      if (pHas > 1e-15) ig -= pHas * log(pHas) / ln2;
+      if (pNot > 1e-15) ig -= pNot * log(pNot) / ln2;
+      if (ig > bestIG) { bestIG = ig; best = attr; }
+    }
+    return best;
+  }
+
   // ── Question selection ─────────────────────────────────────────────────────
 
   String _selectBestQuestion() {
@@ -484,6 +510,12 @@ class GameEngine {
       orElse: () => _attributes.first,
     );
     if (_candidates.length <= 1) return fallback;
+
+    // İlk 3 soruda zorunlu temel filtreler (popBias etkisinden bağımsız)
+    if (_questionCount < _mandatoryEarly.length) {
+      final unasked = _mandatoryEarly.where((a) => !_asked.contains(a)).toList();
+      if (unasked.isNotEmpty) return _bestByUniformIG(unasked);
+    }
 
     if (_candidates.length <= differentiatorAt) {
       return _selectBestDifferentiatorQuestion();
