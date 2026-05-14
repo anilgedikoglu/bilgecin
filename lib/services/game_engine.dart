@@ -175,7 +175,7 @@ class GameEngine {
   static const Map<String, _AttrMeta> _meta = {
     'is_fictional':        _AttrMeta(0, 0.95),
     'is_male':             _AttrMeta(0, 0.99),
-    'is_turkish':          _AttrMeta(0, 0.90),
+    'is_turkish':          _AttrMeta(8, 0.95), // kendi grubu — diversity penalty almaz
     'is_singer':           _AttrMeta(1, 0.90),
     'is_actor':            _AttrMeta(1, 0.90),
     'is_football_player':  _AttrMeta(1, 0.92),
@@ -233,6 +233,7 @@ class GameEngine {
     [0.60, 1.20, 1.40], // 5 age
     [1.00, 1.00, 1.00], // 6 fame
     [1.30, 1.40, 1.20], // 7 fictional-traits (villain/superhero)
+    [2.40, 1.10, 0.80], // 8 nationality (is_turkish) — sorulsun erken, gereksiz olunca düş
   ];
 
   // 5-answer probability model.
