@@ -140,44 +140,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildOrb() {
-    return SizedBox(
-      width: 160,
-      height: 175,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
-        children: [
-          // Circle orb background — sits at the bottom of the SizedBox
-          Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const RadialGradient(
-                colors: [Color(0xFFB07FFF), Color(0xFF6C3FC5), Color(0xFF2D1A6E)],
-                stops: [0.0, 0.5, 1.0],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6C3FC5).withOpacity(0.7),
-                  blurRadius: 40,
-                  spreadRadius: 10,
-                ),
-              ],
-            ),
-          ),
-          // Image: bottom half clipped to circle, top (horns) overflows above
-          Positioned(
-            bottom: 0,
-            child: Image.asset(
-              'assets/tamuaicons.png',
-              width: 140,
-              height: 175,
-              fit: BoxFit.contain,
-              alignment: Alignment.bottomCenter,
-            ),
+    return Container(
+      width: 140,
+      height: 140,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [Color(0xFFB07FFF), Color(0xFF6C3FC5), Color(0xFF2D1A6E)],
+          stops: [0.0, 0.5, 1.0],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6C3FC5).withOpacity(0.7),
+            blurRadius: 40,
+            spreadRadius: 10,
           ),
         ],
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          'assets/tamuaicons.png',
+          width: 140,
+          height: 140,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
