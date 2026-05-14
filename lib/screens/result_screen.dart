@@ -387,34 +387,7 @@ class _ResultScreenState extends State<ResultScreen>
         ),
       );
     } else {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.colorNo.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.colorNo.withOpacity(0.4)),
-        ),
-        child: Column(
-          children: [
-            const Text('🤔', style: TextStyle(fontSize: 42)),
-            const SizedBox(height: 8),
-            const Text(
-              'Bu sefere yenildim!',
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Kimin düşündüğünü söyler misin?',
-              style:
-                  TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.6)),
-            ),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
   }
 
