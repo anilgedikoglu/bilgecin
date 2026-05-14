@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../services/game_engine.dart';
 import '../services/data_service.dart';
@@ -17,8 +16,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
-  int _highScore = 0;
-  int _gamesPlayed = 0;
   bool _loading = false;
 
   @override
@@ -31,15 +28,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _pulseAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _highScore = prefs.getInt('high_score') ?? 0;
-      _gamesPlayed = prefs.getInt('games_played') ?? 0;
-    });
   }
 
   @override
@@ -65,7 +53,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           transitionDuration: const Duration(milliseconds: 400),
         ),
       );
-      _loadStats();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -98,7 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   colors: [Color(0xFFB07FFF), Color(0xFFFFD700)],
                 ).createShader(b),
                 child: const Text(
-                  'AKİNATÖR',
+                  'BİLGECİN',
                   style: TextStyle(
                     fontSize: 42,
                     fontWeight: FontWeight.w900,
@@ -109,7 +96,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Aklındaki kişiyi düşün, ben bulacağım!',
+                'Aklından bir şey geçir, ben bulacağım!',
                 style: TextStyle(
                   fontSize: 15,
                   color: Colors.white.withOpacity(0.65),
@@ -117,19 +104,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               ),
               const Spacer(flex: 2),
-              // Stats row
-              if (_gamesPlayed > 0)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _statChip(Icons.emoji_events_rounded, 'En İyi', '$_highScore'),
-                      const SizedBox(width: 16),
-                      _statChip(Icons.gamepad_rounded, 'Oynandı', '$_gamesPlayed'),
-                    ],
-                  ),
-                ),
               // Start button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -138,24 +112,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   height: 60,
                   child: _loading
                       ? _loadingButton()
-                      : FilledButton.icon(
+                      : FilledButton(
                           onPressed: _startGame,
-                          icon: const Icon(Icons.play_arrow_rounded, size: 26),
-                          label: const Text('OYNAMAYA BAŞLA',
-                              style: TextStyle(fontSize: 16, letterSpacing: 1.5)),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('BİR KARAKTER DÜŞÜNDÜM',
+                                  style: TextStyle(fontSize: 16, letterSpacing: 1.5, fontWeight: FontWeight.w800)),
+                              SizedBox(height: 2),
+                              Text('Aklını Okuyacağım',
+                                  style: TextStyle(fontSize: 11, letterSpacing: 0.5)),
+                            ],
+                          ),
                         ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Info
-              TextButton(
-                onPressed: _showInfoDialog,
-                child: Text(
-                  '50.000 karakter • Türkçe & Uluslararası',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 12,
-                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -184,41 +153,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ],
       ),
-      child: const Icon(Icons.psychology_rounded, size: 72, color: Colors.white),
-    );
-  }
-
-  Widget _statChip(IconData icon, String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppTheme.accentGold),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11, color: Colors.white.withOpacity(0.5))),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
-            ],
-          ),
-        ],
+      child: ClipOval(
+        child: Image.asset(
+          'assets/tamuaicons.png',
+          width: 140,
+          height: 140,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
 
-  Widget _loadingButton() {
+Widget _loadingButton() {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.accent.withOpacity(0.3),
@@ -242,58 +188,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  void _showInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Nasıl Oynanır?',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _InfoRow('🧠', 'Aklında bir karakter düşün'),
-            SizedBox(height: 8),
-            _InfoRow('❓', 'Soruları dürüstçe cevapla'),
-            SizedBox(height: 8),
-            _InfoRow('✅', 'Evet / Herhalde / Bilmiyorum\nHerhalde Değil / Hayır'),
-            SizedBox(height: 8),
-            _InfoRow('🎯', 'Yapay zeka kişini bulmaya çalışır'),
-            SizedBox(height: 8),
-            _InfoRow('🏆', 'Az soruda bulursa yüksek puan!'),
-          ],
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Anladım!'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String emoji;
-  final String text;
-  const _InfoRow(this.emoji, this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(text,
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.85), fontSize: 14)),
-        ),
-      ],
-    );
-  }
 }
