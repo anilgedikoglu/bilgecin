@@ -70,71 +70,90 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const Spacer(flex: 2),
-              // Logo / Orb
-              ScaleTransition(
-                scale: _pulseAnim,
-                child: _buildOrb(),
-              ),
-              const SizedBox(height: 28),
-              // Title
-              ShaderMask(
-                shaderCallback: (b) => const LinearGradient(
-                  colors: [Color(0xFFB07FFF), Color(0xFFFFD700)],
-                ).createShader(b),
-                child: const Text(
-                  'BİLGECİN',
-                  style: TextStyle(
-                    fontSize: 42,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    letterSpacing: 6,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final h = constraints.maxHeight;
+              return Stack(
+                children: [
+                  // Orb — merkezi ekranın 1/3'ünde
+                  Positioned(
+                    top: h / 3 - 70,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: ScaleTransition(
+                        scale: _pulseAnim,
+                        child: _buildOrb(),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Aklından bir şey geçir, ben bulacağım!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.white.withOpacity(0.65),
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Aklını okuyacağım!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.white.withOpacity(0.65),
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Start button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 56),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: _loading
-                      ? _loadingButton()
-                      : FilledButton(
-                          onPressed: _startGame,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                  // Başlık + altyazılar — orb'un hemen altında
+                  Positioned(
+                    top: h / 3 + 82,
+                    left: 20,
+                    right: 20,
+                    child: Column(
+                      children: [
+                        ShaderMask(
+                          shaderCallback: (b) => const LinearGradient(
+                            colors: [Color(0xFFB07FFF), Color(0xFFFFD700)],
+                          ).createShader(b),
+                          child: const Text(
+                            'BİLGECİN',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 42,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: 6,
+                            ),
                           ),
-                          child: const Text('BİR KARAKTER DÜŞÜNDÜM',
-                              style: TextStyle(fontSize: 14, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
                         ),
-                ),
-              ),
-              const SizedBox(height: 28),
-            ],
+                        const SizedBox(height: 8),
+                        Text(
+                          'Aklından bir şey geçir, ben bulacağım!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white.withOpacity(0.65),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Aklını okuyacağım!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.white.withOpacity(0.65),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Buton — ekranın 2/3 noktasında
+                  Positioned(
+                    top: h * 2 / 3 - 25,
+                    left: 56,
+                    right: 56,
+                    child: SizedBox(
+                      height: 50,
+                      child: _loading
+                          ? _loadingButton()
+                          : FilledButton(
+                              onPressed: _startGame,
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                              ),
+                              child: const Text('BİR KARAKTER DÜŞÜNDÜM',
+                                  style: TextStyle(fontSize: 14, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+                            ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
