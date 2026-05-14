@@ -114,6 +114,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ? _loadingButton()
                       : FilledButton(
                           onPressed: _startGame,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                          ),
                           child: const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
