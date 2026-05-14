@@ -111,7 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Aklından bir şey geçir, ben bulacağım!',
+                          'Aklından bir şey geçir, ben bulacağım.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
@@ -134,7 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                   // Buton — ekranın 2/3 noktasında
                   Positioned(
-                    top: h * 2 / 3 - 25,
+                    top: h * 3 / 4 - 25,
                     left: 56,
                     right: 56,
                     child: SizedBox(
