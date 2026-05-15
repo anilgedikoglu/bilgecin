@@ -1,301 +1,295 @@
-﻿import 'dart:math';
+import 'dart:math';
 import '../models/thing_entry.dart';
 import '../models/any_result.dart';
 import 'game_engine.dart' show AnswerType, AnswerTypeExt, AskedQuestion;
 
+// ── Question definition with rich metadata ────────────────────────────────────
+class _QDef {
+  final String       attr;
+  final String       text;
+  final String       domain;   // 'core'|'animal'|'plant_food'|'object'|'digital'|'brand'|'place'|'abstract'|'health'|'space'|'natural'|'vehicle'|'watch'|'material'
+  final int          tier;     // 1=earliest, 5=most specific
+  final List<String> reqAny;   // any of these 'attr:val' must be in _known to unlock
+  final double       confusion; // 0–1 penalty for ambiguous questions
+
+  const _QDef(this.attr, this.text, this.domain, this.tier,
+      {this.reqAny = const [], this.confusion = 0.0});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 class ThingEngine {
-  final List<ThingEntry> _all;
-  List<ThingEntry> _candidates;
+  final List<ThingEntry>        _all;
+  List<ThingEntry>              _candidates;
   final Map<ThingEntry, double> _scores  = {};
   final Map<ThingEntry, double> _popBias = {};
   final List<String>            _asked   = [];
   final List<AskedQuestion>     _history = [];
-  int _questionCount = 0;
-  late String _currentAttribute;
+  final Map<String, int>        _known   = {}; // attr → 0|1 (established facts)
+  int     _questionCount = 0;
+  late    String _currentAttribute;
+  String? _forceBranch;
 
-  static const double eliminationThreshold = -1.2;
-  static const int    autoGuessAt          = 1;
-  static const int    differentiatorAt     = 10;
-  static const int    maxQuestions         = 18;
+  // ── Tuning ─────────────────────────────────────────────────────────────────
+  static const int    autoGuessAt      = 1;
+  static const int    differentiatorAt = 10;
+  static const int    maxQuestions     = 18;
+  static const double matchMag         = 0.5;
+  static const double mismatchMag      = 1.6;
 
-  // ── Attribute list ────────────────────────────────────────────────────────
-  static const List<String> kAttributes = [
-    // Core — highest early-phase boost, always asked first
-    'can_be_touched', 'is_living', 'is_object', 'is_handheld',
-    // Broad type discriminators
-    'is_physical', 'is_manmade', 'is_natural',
-    'is_animal', 'is_plant', 'is_food', 'is_drink', 'is_food_or_drink',
-    'is_vehicle', 'is_place', 'is_abstract', 'is_event',
-    'is_brand', 'is_digital', 'is_digital_or_brand',
-    'is_person', 'is_character', 'is_fictional',
-    // Object domain
-    'is_tool', 'is_household', 'is_kitchen',
-    'is_wearable', 'is_accessory', 'is_clothing', 'is_furniture',
-    // Physical properties — asked early-to-mid
-    'is_found_at_home', 'is_electric', 'is_small', 'is_large',
-    'is_used_daily', 'is_found_in_nature',
-    'can_move_by_itself', 'is_motorized', 'is_dangerous',
-    // Watch / accessory domain
-    'is_watch_related', 'is_clock_or_watch', 'is_smartwatch',
-    'is_digital_watch', 'is_analog_watch', 'is_luxury_brand',
-    'is_affordable_brand', 'is_japanese_brand', 'is_swiss_brand',
-    'is_american_brand', 'is_korean_brand',
-    // Tech domain
-    'is_phone_related', 'is_computer_related',
-    'is_game_related', 'is_app_related', 'is_social_media',
-    'is_software', 'is_mobile_app', 'is_video_game', 'is_board_game', 'is_online_service', 'is_internet_related',
-    'is_car_brand', 'is_car_model',
-    // Tool domain
-    'is_tool_for_repair', 'is_cutting_tool', 'is_holding_tool', 'is_measuring_tool',
-    'is_cleaning_tool', 'is_writing_tool',
-    'is_cooking_tool', 'is_eating_tool',
-    // More physical
-    'is_edible',
-    'is_bathroom_item', 'is_bedroom_item', 'is_living_room_item', 'is_outdoor_item',
-    'is_wrist_worn',
-    // Animal domain
-    'is_pet', 'is_wild_animal', 'is_farm_animal',
-    'can_fly', 'lives_in_water', 'is_insect', 'is_mammal',
-    'is_bird', 'is_reptile', 'is_fish',
-    // Plant / food domain
-    'is_fruit', 'is_vegetable', 'is_tree', 'is_flower', 'is_spice',
-    'is_sweet', 'is_sour', 'is_liquid', 'is_alcoholic', 'is_carbonated',
-    // Material
-    'is_metal', 'is_wood', 'is_plastic', 'is_glass',
-    'is_fabric', 'is_leather', 'is_paper',
-    // Nature / weather / space
-    'is_weather_related', 'is_sky_related', 'is_space_related',
-    'is_water_related', 'is_fire_related', 'is_air_related', 'is_earth_related', 'is_hot', 'is_cold',
-    // Place domain
-    'is_city', 'is_country', 'is_building', 'is_natural_place',
-    'is_historical_place',
-    // Abstract / emotion domain
-    'is_emotion', 'is_positive', 'is_negative', 'is_time_related',
-    'is_mind_related', 'is_sleep_related',
-    'is_religious_or_spiritual', 'is_money_related', 'is_symbol',
-    // Health
-    'is_health_related', 'is_health_condition',
-    // Context
-    'is_sport_related', 'is_music_related', 'is_school_related',
-    'is_child_friendly', 'is_turkish', 'is_global',
-    'is_used_for_fun', 'is_used_for_work',
+  // Elimination threshold: -1.6 = one definitive mismatch (mag 1.6)
+  // Keep static at -1.2 so any definitive mismatch eliminates candidates.
+  static const double _elimThreshold = -1.2;
+
+  // Multi-factor scoring weights — IG dominates; others are gentle tiebreakers
+  static const double _wIG        = 1.0;
+  static const double _wSplit     = 0.2;   // mild balance correction
+  static const double _wDomain    = 0.1;   // very weak domain hint
+  static const double _wTier      = 0.15;  // prefer earlier-tier questions
+  static const double _wConfusion = 0.15;  // mild confusion penalty
+
+  // ── Question definitions ───────────────────────────────────────────────────
+  static const List<_QDef> _kDefs = [
+    // ── Core broad (tier 1-2) ───────────────────────────────────────────────
+    _QDef('can_be_touched',  'Bu şey elle dokunulabilir mi?',                    'core', 1),
+    _QDef('is_living',       'Bu şey canlı mı?',                                 'core', 1),
+    _QDef('is_object',       'Bu şey elle tutulabilen bir nesne mi?',             'core', 1),
+    _QDef('is_handheld',     'Bu şey tek elle taşınabilir mi?',                  'core', 1),
+    _QDef('is_physical',     'Bu şey fiziksel olarak var mı?',                   'core', 1),
+    _QDef('is_manmade',      'Bu şey insan yapımı mı?',                          'core', 2),
+    _QDef('is_natural',      'Bu şey doğada kendiliğinden var mı?',              'core', 2),
+    // ── Broad types (tier 2) ───────────────────────────────────────────────
+    _QDef('is_animal',       'Bu şey bir hayvan mı?',                            'animal',     2),
+    _QDef('is_plant',        'Bu şey bir bitki mi?',                             'plant_food', 2),
+    _QDef('is_food',         'Bu şey yiyecek mi?',                               'plant_food', 2),
+    _QDef('is_drink',        'Bu şey içecek mi?',                                'plant_food', 2),
+    _QDef('is_food_or_drink','Bu şey yiyecek veya içecek mi?',                   'plant_food', 2, confusion: 0.3),
+    _QDef('is_vehicle',      'Bu şey bir taşıt mı?',                             'vehicle',    2),
+    _QDef('is_place',        'Bu şey bir yer mi?',                               'place',      2),
+    _QDef('is_abstract',     'Bu şey soyut bir kavram veya duygu mu?',           'abstract',   2),
+    _QDef('is_event',        'Bu şey bir olay veya durum mu?',                   'abstract',   3),
+    _QDef('is_brand',        'Bu şey bir marka mı?',                             'brand',      2),
+    _QDef('is_digital',      'Bu şey elektronik cihaz veya yazılım mı?',         'digital',    2),
+    _QDef('is_digital_or_brand','Bu şey marka veya dijital ürün mü?',            'digital',    3, confusion: 0.3),
+    _QDef('is_person',       'Bu şey bir kişi mi?',                              'core',       2),
+    _QDef('is_character',    'Bu şey bir karakter veya figür mü?',               'core',       3),
+    _QDef('is_fictional',    'Bu şey kurgusal mı?',                              'core',       2),
+    // ── Object domain (tier 3) ─────────────────────────────────────────────
+    _QDef('is_tool',         'Bu şey bir el aleti mi?',                          'object', 3),
+    _QDef('is_household',    'Bu şey bir ev eşyası mı?',                         'object', 3),
+    _QDef('is_kitchen',      'Bu şey mutfakta kullanılır mı?',                   'object', 3),
+    _QDef('is_wearable',     'Bu şey giyilebilir veya takılabilir mi?',          'object', 3),
+    _QDef('is_accessory',    'Bu şey bir aksesuar mı?',                          'object', 3),
+    _QDef('is_clothing',     'Bu şey bir giysi mi?',                             'object', 3),
+    _QDef('is_furniture',    'Bu şey bir mobilya mı?',                           'object', 3),
+    // ── Physical properties (tier 3) ──────────────────────────────────────
+    _QDef('is_found_at_home','Bu şey evde bulunur mu?',                          'core',   3),
+    _QDef('is_electric',     'Bu şey elektrikli mi?',                            'object', 3),
+    _QDef('is_small',        'Bu şey küçük mü?',                                 'core',   3),
+    _QDef('is_large',        'Bu şey büyük mü?',                                 'core',   3),
+    _QDef('is_used_daily',   'Bu şey günlük hayatta sık kullanılır mı?',         'core',   3),
+    _QDef('is_found_in_nature','Bu şey doğada bulunur mu?',                      'natural', 3),
+    _QDef('can_move_by_itself','Bu şey kendi kendine hareket edebilir mi?',      'core',    3),
+    _QDef('is_motorized',    'Bu şey motorlu mu?',                               'vehicle', 3),
+    _QDef('is_dangerous',    'Bu şey tehlikeli olabilir mi?',                    'core',    4),
+    // ── Watch / accessory (tier 3-5) ──────────────────────────────────────
+    _QDef('is_watch_related','Bu şey bir saatle ilgili mi?',                     'watch', 3),
+    _QDef('is_clock_or_watch','Bu şey bir saat mi?',                             'watch', 4, reqAny: ['is_watch_related:1']),
+    _QDef('is_smartwatch',   'Bu şey akıllı saat mi?',                           'watch', 4, reqAny: ['is_watch_related:1']),
+    _QDef('is_digital_watch','Bu şey dijital göstergeli bir saat mi?',           'watch', 5, reqAny: ['is_watch_related:1']),
+    _QDef('is_analog_watch', 'Bu şey akrep-yelkovanlı klasik saat mi?',         'watch', 5, reqAny: ['is_watch_related:1']),
+    // ── Brand attributes (tier 4-5, unlocked by is_brand:1) ───────────────
+    _QDef('is_luxury_brand', 'Bu şey lüks bir marka mı?',                        'brand', 4, reqAny: ['is_brand:1']),
+    _QDef('is_affordable_brand','Bu şey uygun fiyatlı marka olarak bilinir mi?', 'brand', 4, reqAny: ['is_brand:1']),
+    _QDef('is_japanese_brand','Bu şey Japon markası mı?',                        'brand', 5, reqAny: ['is_brand:1']),
+    _QDef('is_swiss_brand',  'Bu şey İsviçre markası mı?',                       'brand', 5, reqAny: ['is_brand:1']),
+    _QDef('is_american_brand','Bu şey Amerikan markası mı?',                     'brand', 5, reqAny: ['is_brand:1']),
+    _QDef('is_korean_brand', 'Bu şey Kore markası mı?',                          'brand', 5, reqAny: ['is_brand:1']),
+    _QDef('is_car_brand',    'Bu şey bir araba markası mı?',                     'brand', 4, reqAny: ['is_brand:1']),
+    _QDef('is_car_model',    'Bu şey belirli bir araba modeli mi?',              'brand', 4, reqAny: ['is_brand:1', 'is_car_brand:1']),
+    // ── Tech domain (tier 4, unlocked by is_digital:1) ────────────────────
+    _QDef('is_phone_related','Bu şey telefonla ilgili mi?',                      'digital', 4, reqAny: ['is_digital:1']),
+    _QDef('is_computer_related','Bu şey bilgisayarla ilgili mi?',                'digital', 4, reqAny: ['is_digital:1']),
+    _QDef('is_game_related', 'Bu şey oyunla ilgili mi?',                         'digital', 4, reqAny: ['is_digital:1']),
+    _QDef('is_app_related',  'Bu şey bir uygulama mı?',                          'digital', 4, reqAny: ['is_digital:1']),
+    _QDef('is_social_media', 'Bu şey sosyal medya platformu mu?',                'digital', 4, reqAny: ['is_digital:1']),
+    _QDef('is_software',     'Bu şey bir yazılım mı?',                           'digital', 4, reqAny: ['is_digital:1']),
+    _QDef('is_mobile_app',   'Bu şey bir mobil uygulama mı?',                    'digital', 5, reqAny: ['is_digital:1']),
+    _QDef('is_video_game',   'Bu şey bir video oyunu mu?',                       'digital', 5, reqAny: ['is_digital:1']),
+    _QDef('is_board_game',   'Bu şey bir masa oyunu mu?',                        'digital', 5, reqAny: ['is_digital:1', 'is_game_related:1']),
+    _QDef('is_online_service','Bu şey web üzerinden çalışan bir servis mi?',     'digital', 5, reqAny: ['is_digital:1']),
+    _QDef('is_internet_related','Bu şey internetle bağlantılı mı?',             'digital', 4, reqAny: ['is_digital:1']),
+    // ── Tool domain (tier 4) ──────────────────────────────────────────────
+    _QDef('is_tool_for_repair','Bu şey tamir veya inşaatta kullanılır mı?',      'object', 4, reqAny: ['is_tool:1', 'is_object:1']),
+    _QDef('is_cutting_tool', 'Bu şey kesmek için mi kullanılır?',                'object', 4, reqAny: ['is_tool:1', 'is_object:1']),
+    _QDef('is_holding_tool', 'Bu şey bir şeyleri tutmak için mi kullanılır?',    'object', 4, reqAny: ['is_tool:1', 'is_object:1']),
+    _QDef('is_measuring_tool','Bu şey ölçmek için mi kullanılır?',               'object', 4, reqAny: ['is_tool:1', 'is_object:1']),
+    _QDef('is_cleaning_tool','Bu şey temizlemek için mi kullanılır?',            'object', 4, reqAny: ['is_object:1', 'is_household:1']),
+    _QDef('is_writing_tool', 'Bu şey yazmak için mi kullanılır?',                'object', 4, reqAny: ['is_tool:1', 'is_object:1']),
+    _QDef('is_cooking_tool', 'Bu şey yemek pişirmek için mi kullanılır?',        'object', 4, reqAny: ['is_kitchen:1', 'is_object:1']),
+    _QDef('is_eating_tool',  'Bu şey yemek yemek için mi kullanılır?',           'object', 4, reqAny: ['is_kitchen:1', 'is_object:1']),
+    // ── Physical detail (tier 3-4) ────────────────────────────────────────
+    _QDef('is_edible',       'Bu şey yenilebilir mi?',                           'plant_food', 3),
+    _QDef('is_bathroom_item','Bu şey banyoda bulunur mu?',                       'object', 4),
+    _QDef('is_bedroom_item', 'Bu şey yatak odasında bulunur mu?',                'object', 4),
+    _QDef('is_living_room_item','Bu şey oturma odasında bulunur mu?',            'object', 4),
+    _QDef('is_outdoor_item', 'Bu şey genellikle dışarıda kullanılır mı?',        'object', 4),
+    _QDef('is_wrist_worn',   'Bu şey bilek veya kola takılır mı?',               'object', 4, reqAny: ['is_wearable:1', 'is_watch_related:1']),
+    // ── Animal domain (tier 4, unlocked by is_animal:1) ───────────────────
+    _QDef('is_pet',          'Bu şey evcil hayvan mı?',                          'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_wild_animal',  'Bu şey vahşi/yabani bir hayvan mı?',               'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_farm_animal',  'Bu şey çiftlik hayvanı mı?',                       'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('can_fly',         'Bu şey uçabilir mi?',                              'animal', 4, reqAny: ['is_animal:1', 'is_bird:1']),
+    _QDef('lives_in_water',  'Bu şey suda yaşar mı?',                            'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_insect',       'Bu şey bir böcek mi?',                             'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_mammal',       'Bu şey memeli bir hayvan mı?',                     'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_bird',         'Bu şey bir kuş mu?',                               'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_reptile',      'Bu şey bir sürüngen mi?',                          'animal', 4, reqAny: ['is_animal:1']),
+    _QDef('is_fish',         'Bu şey bir balık mı?',                             'animal', 4, reqAny: ['is_animal:1']),
+    // ── Plant / food domain (tier 4, unlocked) ────────────────────────────
+    _QDef('is_fruit',        'Bu şey bir meyve mi?',                             'plant_food', 4, reqAny: ['is_food:1', 'is_plant:1', 'is_edible:1']),
+    _QDef('is_vegetable',    'Bu şey bir sebze mi?',                             'plant_food', 4, reqAny: ['is_food:1', 'is_plant:1', 'is_edible:1']),
+    _QDef('is_tree',         'Bu şey bir ağaç mı?',                              'plant_food', 4, reqAny: ['is_plant:1']),
+    _QDef('is_flower',       'Bu şey bir çiçek mi?',                             'plant_food', 4, reqAny: ['is_plant:1']),
+    _QDef('is_spice',        'Bu şey bir baharat mı?',                           'plant_food', 4, reqAny: ['is_food:1', 'is_plant:1']),
+    _QDef('is_sweet',        'Bu şey tatlı mı?',                                 'plant_food', 4, reqAny: ['is_food:1', 'is_drink:1', 'is_edible:1']),
+    _QDef('is_sour',         'Bu şey ekşi mi?',                                  'plant_food', 5, reqAny: ['is_food:1', 'is_edible:1']),
+    _QDef('is_liquid',       'Bu şey sıvı mı?',                                  'plant_food', 3),
+    _QDef('is_alcoholic',    'Bu şey alkol içeriyor mu?',                        'plant_food', 4, reqAny: ['is_drink:1', 'is_liquid:1']),
+    _QDef('is_carbonated',   'Bu şey gazlı mı?',                                 'plant_food', 4, reqAny: ['is_drink:1', 'is_liquid:1']),
+    // ── Material (tier 4) ─────────────────────────────────────────────────
+    _QDef('is_metal',        'Bu şey metalden yapılmış mı?',                     'material', 4),
+    _QDef('is_wood',         'Bu şey ahşaptan yapılmış mı?',                     'material', 4),
+    _QDef('is_plastic',      'Bu şey plastikten yapılmış mı?',                   'material', 4),
+    _QDef('is_glass',        'Bu şey camdan yapılmış mı?',                       'material', 4),
+    _QDef('is_fabric',       'Bu şey kumaştan yapılmış mı?',                     'material', 4, reqAny: ['is_wearable:1', 'is_clothing:1', 'is_furniture:1']),
+    _QDef('is_leather',      'Bu şey deriden yapılmış mı?',                      'material', 5, reqAny: ['is_wearable:1', 'is_accessory:1']),
+    _QDef('is_paper',        'Bu şey kağıttan yapılmış mı?',                     'material', 4, reqAny: ['is_object:1']),
+    // ── Nature / weather / space (tier 3-4) ───────────────────────────────
+    _QDef('is_weather_related','Bu şey bir hava olayıyla ilgili mi?',            'natural', 3),
+    _QDef('is_sky_related',  'Bu şey gökyüzüyle ilgili mi?',                     'natural', 4),
+    _QDef('is_space_related','Bu şey uzayla ilgili mi?',                         'space',   3),
+    _QDef('is_water_related','Bu şey suyla ilgili mi?',                          'natural', 3),
+    _QDef('is_fire_related', 'Bu şey ateşle ilgili mi?',                         'natural', 4),
+    _QDef('is_air_related',  'Bu şey havayla veya uçuşla ilgili mi?',            'natural', 4),
+    _QDef('is_earth_related','Bu şey toprak veya zemin işlemeyle ilgili mi?',    'natural', 4),
+    _QDef('is_hot',          'Bu şey sıcak mı?',                                 'natural', 4, confusion: 0.2),
+    _QDef('is_cold',         'Bu şey soğuk mu?',                                 'natural', 4, confusion: 0.2),
+    // ── Place domain (tier 4, unlocked by is_place:1) ─────────────────────
+    _QDef('is_city',         'Bu şey bir şehir mi?',                             'place', 4, reqAny: ['is_place:1']),
+    _QDef('is_country',      'Bu şey bir ülke mi?',                              'place', 4, reqAny: ['is_place:1']),
+    _QDef('is_building',     'Bu şey bir bina veya yapı mı?',                    'place', 4, reqAny: ['is_place:1']),
+    _QDef('is_natural_place','Bu şey doğal bir yer mi? (dağ, deniz, orman...)',  'place', 4, reqAny: ['is_place:1']),
+    _QDef('is_historical_place','Bu şey tarihi bir yer mi?',                     'place', 5, reqAny: ['is_place:1', 'is_building:1']),
+    // ── Abstract / emotion (tier 4, mostly unlocked by is_abstract:1) ─────
+    _QDef('is_emotion',      'Bu şey bir duygu mu?',                             'abstract', 4, reqAny: ['is_abstract:1']),
+    _QDef('is_positive',     'Bu şey genel olarak olumlu bir şey mi?',           'abstract', 4, reqAny: ['is_abstract:1', 'is_emotion:1']),
+    _QDef('is_negative',     'Bu şey genel olarak olumsuz bir şey mi?',          'abstract', 4, reqAny: ['is_abstract:1', 'is_emotion:1']),
+    _QDef('is_time_related', 'Bu şey zamanla ilgili mi?',                        'abstract', 4, reqAny: ['is_abstract:1']),
+    _QDef('is_mind_related', 'Bu şey zihin veya düşünceyle ilgili mi?',          'abstract', 4),
+    _QDef('is_sleep_related','Bu şey uykuyla ilgili mi?',                        'abstract', 5, reqAny: ['is_abstract:1', 'is_health_related:1']),
+    _QDef('is_religious_or_spiritual','Bu şey dini veya manevi bir şey mi?',     'abstract', 3),
+    _QDef('is_money_related','Bu şey parayla ilgili mi?',                        'abstract', 4),
+    _QDef('is_symbol',       'Bu şey bir sembol mü?',                            'abstract', 3),
+    // ── Health (tier 3-4) ─────────────────────────────────────────────────
+    _QDef('is_health_related','Bu şey sağlıkla ilgili mi?',                      'health', 3),
+    _QDef('is_health_condition','Bu şey bir hastalık veya sağlık durumu mu?',    'health', 4, reqAny: ['is_health_related:1']),
+    // ── Context / cross-domain (tier 3-4) ─────────────────────────────────
+    _QDef('is_sport_related','Bu şey sporla ilgili mi?',                         'core', 3),
+    _QDef('is_music_related','Bu şey müzikle ilgili mi?',                        'core', 3),
+    _QDef('is_school_related','Bu şey okul veya eğitimle ilgili mi?',            'core', 4),
+    _QDef('is_child_friendly','Bu şey çocuklar için uygun mu?',                  'core', 4),
+    _QDef('is_turkish',      "Bu şey Türkiye'ye özgü mü?",                       'core', 4),
+    _QDef('is_global',       'Bu şey dünya genelinde çok bilinen bir şey mi?',   'core', 4),
+    _QDef('is_used_for_fun', 'Bu şey eğlence amaçlı mı?',                       'core', 3),
+    _QDef('is_used_for_work','Bu şey iş veya çalışma amacıyla kullanılır mı?',  'core', 4),
   ];
 
-  // ── Turkish questions ─────────────────────────────────────────────────────
-  static const Map<String, String> kQuestions = {
-    'is_physical':              'Bu şey fiziksel olarak var mı?',
-    'is_living':                'Bu şey canlı mı?',
-    'is_manmade':               'Bu şey insan yapımı mı?',
-    'is_natural':               'Bu şey doğada kendiliğinden var mı?',
-    'is_animal':                'Bu şey bir hayvan mı?',
-    'is_plant':                 'Bu şey bir bitki mi?',
-    'is_food':                  'Bu şey yiyecek mi?',
-    'is_drink':                 'Bu şey bir içecek mi?',
-    'is_food_or_drink':         'Bu şey yiyecek veya içecek mi?',
-    'is_vehicle':               'Bu şey bir taşıt mı?',
-    'is_place':                 'Bu şey bir yer mi?',
-    'is_abstract':              'Bu şey soyut bir kavram veya duygu mu?',
-    'is_event':                 'Bu şey bir olay veya durum mu?',
-    'is_brand':                 'Bu şey bir marka mı?',
-    'is_digital':               'Bu şey bir elektronik cihaz veya yazılım mı? (telefon, uygulama, oyun...)',
-    'is_digital_or_brand':      'Bu şey bir marka veya dijital ürün mü?',
-    'is_person':                'Bu şey bir kişi mi?',
-    'is_character':             'Bu şey bir karakter veya figür mü?',
-    'is_fictional':             'Bu şey kurgusal mı?',
-    'is_tool':                  'Bu şey bir el aleti mi?',
-    'is_household':             'Bu şey bir ev eşyası mı?',
-    'is_kitchen':               'Bu şey mutfakta kullanılır mı?',
-    'is_object':                'Bu şey elle tutulabilen bir nesne mi?',
-    'is_wearable':              'Bu şey giyilebilir veya takılabilir mi?',
-    'is_accessory':             'Bu şey bir aksesuar mı?',
-    'is_clothing':              'Bu şey bir giysi mi?',
-    'is_furniture':             'Bu şey bir mobilya mı?',
-    'is_watch_related':         'Bu şey bir saatle ilgili mi?',
-    'is_clock_or_watch':        'Bu şey bir saat mi?',
-    'is_smartwatch':            'Bu şey akıllı saat mi?',
-    'is_digital_watch':         'Bu şey dijital saatleriyle bilinen bir şey mi?',
-    'is_analog_watch':          'Bu şey akrep-yelkovanlı klasik saat mi?',
-    'is_luxury_brand':          'Bu şey lüks bir marka mı?',
-    'is_affordable_brand':      'Bu şey uygun fiyatlı bir marka olarak bilinir mi?',
-    'is_japanese_brand':        'Bu şey Japon markası mı?',
-    'is_swiss_brand':           'Bu şey İsviçre markası mı?',
-    'is_american_brand':        'Bu şey Amerikan markası mı?',
-    'is_korean_brand':          'Bu şey Kore markası mı?',
-    'is_electric':              'Bu şey elektrikli mi?',
-    'is_motorized':             'Bu şey motorlu mu?',
-    'is_handheld':              'Bu şey tek elle taşınabilir mi?',
-    'is_phone_related':         'Bu şey telefonla ilgili mi?',
-    'is_computer_related':      'Bu şey bilgisayarla ilgili mi?',
-    'is_game_related':          'Bu şey oyunla ilgili mi?',
-    'is_app_related':           'Bu şey bir uygulama mı?',
-    'is_social_media':          'Bu şey sosyal medya platformu mu?',
-    'is_software':              'Bu şey bir yazılım mı?',
-    'is_mobile_app':            'Bu şey bir mobil uygulama mı?',
-    'is_video_game':            'Bu şey bir video oyunu mu?',
-    'is_board_game':            'Bu şey bir masa oyunu mu?',
-    'is_online_service':        'Bu şey internette çalışan bir servis mi? (web sitesi veya bulut uygulama)',
-    'is_internet_related':      'Bu şey internetle bağlantılı mı?',
-    'is_car_brand':             'Bu şey bir araba markası mı?',
-    'is_car_model':             'Bu şey belirli bir araba modeli mi?',
-    'is_tool_for_repair':       'Bu şey tamir veya inşaat işlerinde kullanılır mı?',
-    'is_cutting_tool':          'Bu şey kesmek için kullanılır mı?',
-    'is_holding_tool':          'Bu şey bir şeyleri tutmak veya kavramak için mi kullanılır?',
-    'is_measuring_tool':        'Bu şey ölçmek için mi kullanılır?',
-    'is_cleaning_tool':         'Bu şey temizlemek için mi kullanılır?',
-    'is_writing_tool':          'Bu şey yazmak için kullanılır mı?',
-    'is_cooking_tool':          'Bu şey yemek pişirmek için mi kullanılır?',
-    'is_eating_tool':           'Bu şey yemek yemek için mi kullanılır?',
-    'is_edible':                'Bu şey yenilebilir mi?',
-    'is_used_daily':            'Bu şey günlük hayatta sık kullanılır mı?',
-    'is_found_at_home':         'Bu şey evde bulunur mu?',
-    'is_found_in_nature':       'Bu şey doğada bulunur mu?',
-    'is_large':                 'Bu şey büyük mü?',
-    'is_small':                 'Bu şey küçük mü?',
-    'can_move_by_itself':       'Bu şey kendi kendine hareket edebilir mi?',
-    'can_be_touched':           'Bu şey elle dokunulabilir mi?',
-    'is_dangerous':             'Bu şey tehlikeli olabilir mi?',
-    'is_bathroom_item':         'Bu şey banyoda bulunur mu?',
-    'is_bedroom_item':          'Bu şey yatak odasında bulunur mu?',
-    'is_living_room_item':      'Bu şey oturma odasında bulunur mu?',
-    'is_outdoor_item':          'Bu şey genellikle dışarıda kullanılır mı?',
-    'is_wrist_worn':            'Bu şey bilek veya kola takılır mı?',
-    'is_pet':                   'Bu şey evcil hayvan mı?',
-    'is_wild_animal':           'Bu şey vahşi/yabani bir hayvan mı?',
-    'is_farm_animal':           'Bu şey çiftlik hayvanı mı?',
-    'can_fly':                  'Bu şey uçabilir mi?',
-    'lives_in_water':           'Bu şey suda yaşar mı?',
-    'is_insect':                'Bu şey bir böcek mi?',
-    'is_mammal':                'Bu şey memeli bir hayvan mı?',
-    'is_bird':                  'Bu şey bir kuş mu?',
-    'is_reptile':               'Bu şey bir sürüngen mi?',
-    'is_fish':                  'Bu şey bir balık mı?',
-    'is_fruit':                 'Bu şey bir meyve mi?',
-    'is_vegetable':             'Bu şey bir sebze mi?',
-    'is_tree':                  'Bu şey bir ağaç mı?',
-    'is_flower':                'Bu şey bir çiçek mi?',
-    'is_spice':                 'Bu şey bir baharat mı?',
-    'is_sweet':                 'Bu şey tatlı mı?',
-    'is_sour':                  'Bu şey ekşi mi?',
-    'is_liquid':                'Bu şey sıvı mı?',
-    'is_metal':                 'Bu şey metalden yapılmış mı?',
-    'is_wood':                  'Bu şey ahşaptan yapılmış mı?',
-    'is_plastic':               'Bu şey plastikten yapılmış mı?',
-    'is_glass':                 'Bu şey camdan yapılmış mı?',
-    'is_fabric':                'Bu şey kumaştan yapılmış mı?',
-    'is_leather':               'Bu şey deriden yapılmış mı?',
-    'is_paper':                 'Bu şey kağıttan yapılmış mı?',
-    'is_weather_related':       'Bu şey bir hava olayıyla ilgili mi?',
-    'is_sky_related':           'Bu şey gökyüzüyle ilgili mi?',
-    'is_space_related':         'Bu şey uzayla ilgili mi?',
-    'is_water_related':         'Bu şey suyla ilgili mi?',
-    'is_fire_related':          'Bu şey ateşle ilgili mi?',
-    'is_air_related':           'Bu şey havayla veya uçuşla ilgili mi?',
-    'is_earth_related':         'Bu şey toprak veya zemin işlemeyle ilgili mi?',
-    'is_hot':                   'Bu şey sıcak mı?',
-    'is_cold':                  'Bu şey soğuk mu?',
-    'is_city':                  'Bu şey bir şehir mi?',
-    'is_country':               'Bu şey bir ülke mi?',
-    'is_building':              'Bu şey bir bina veya yapı mı?',
-    'is_natural_place':         'Bu şey doğal bir yer mi? (dağ, deniz, orman...)',
-    'is_historical_place':      'Bu şey tarihi bir yer mi?',
-    'is_emotion':               'Bu şey bir duygu mu?',
-    'is_positive':              'Bu şey genel olarak olumlu bir şey mi?',
-    'is_negative':              'Bu şey genel olarak olumsuz bir şey mi?',
-    'is_time_related':          'Bu şey zamanla ilgili mi?',
-    'is_mind_related':          'Bu şey zihin veya düşünceyle ilgili mi?',
-    'is_sleep_related':         'Bu şey uykuyla ilgili mi?',
-    'is_religious_or_spiritual':'Bu şey dini veya manevi bir şey mi?',
-    'is_money_related':         'Bu şey parayla ilgili mi?',
-    'is_symbol':                'Bu şey bir sembol mü?',
-    'is_health_related':        'Bu şey sağlıkla ilgili mi?',
-    'is_health_condition':      'Bu şey bir hastalık veya sağlık durumu mu?',
-    'is_alcoholic':             'Bu şey alkol içeriyor mu?',
-    'is_carbonated':            'Bu şey gazlı mı?',
-    'is_sport_related':         'Bu şey sporla ilgili mi?',
-    'is_music_related':         'Bu şey müzikle ilgili mi?',
-    'is_school_related':        'Bu şey okul veya eğitimle ilgili mi?',
-    'is_child_friendly':        'Bu şey çocuklar için uygun mu?',
-    'is_turkish':               "Bu şey Türkiye'ye özgü mü?",
-    'is_global':                'Bu şey dünya genelinde çok bilinen bir şey mi?',
-    'is_used_for_fun':          'Bu şey eğlence amaçlı mı?',
-    'is_used_for_work':         'Bu şey iş veya çalışma amacıyla kullanılır mı?',
-  };
+  // Public backward-compat lists derived from _kDefs
+  static final List<String>         kAttributes = _kDefs.map((d) => d.attr).toList();
+  static final Map<String, String>  kQuestions  = {for (final d in _kDefs) d.attr: d.text};
 
-  // ── Logical implication table ─────────────────────────────────────────────
-  // When attr is definitively answered (key = 'attr:1' or 'attr:0'),
-  // auto-answer the mapped attributes without spending a question on them.
+  // ── Expanded implication table ─────────────────────────────────────────────
   static const Map<String, Map<String, int>> _implications = {
-    // Touchable → physical, not abstract/place (NOT 'not digital': tablets are touchable AND digital)
+    // Touchable
     'can_be_touched:1': {'is_physical': 1, 'is_abstract': 0, 'is_place': 0},
-    // Not touchable → not handheld/object/wearable
     'can_be_touched:0': {'is_handheld': 0, 'is_object': 0, 'is_wearable': 0},
-    // Living → not manmade/abstract/digital/vehicle/tool/furniture/electric/motorized
+    // Living
     'is_living:1':      {'is_manmade': 0, 'is_abstract': 0, 'is_digital': 0,
                          'is_vehicle': 0, 'is_tool': 0, 'is_furniture': 0,
                          'is_electric': 0, 'is_motorized': 0},
-    // Not living → not animal/plant (humans can't make living things either way)
     'is_living:0':      {'is_animal': 0, 'is_plant': 0},
-    // Abstract → not physical/touchable/handheld/object/living/animal/plant/vehicle/food
+    // Abstract
     'is_abstract:1':    {'is_physical': 0, 'can_be_touched': 0, 'is_handheld': 0,
                          'is_object': 0, 'is_living': 0, 'is_animal': 0,
                          'is_plant': 0, 'is_vehicle': 0, 'is_food': 0,
                          'is_drink': 0, 'is_food_or_drink': 0},
-    // Not physical → not touchable/handheld/object/living/animal/plant/vehicle
     'is_physical:0':    {'can_be_touched': 0, 'is_handheld': 0, 'is_object': 0,
                          'is_living': 0, 'is_animal': 0, 'is_plant': 0,
                          'is_vehicle': 0},
-    // Manmade → not living/natural/animal/plant
-    'is_manmade:1':     {'is_living': 0, 'is_natural': 0,
-                         'is_animal': 0, 'is_plant': 0},
-    // Digital → not living (physical digital devices like tablets CAN be touched/held/objects)
+    // Manmade
+    'is_manmade:1':     {'is_living': 0, 'is_natural': 0, 'is_animal': 0, 'is_plant': 0},
+    // Digital
     'is_digital:1':     {'is_living': 0},
-    // Place → not handheld/object/living/food/vehicle
+    // Place
     'is_place:1':       {'is_handheld': 0, 'is_object': 0, 'is_living': 0,
                          'is_food': 0, 'is_vehicle': 0},
-    // Animal → living/physical; not manmade/abstract/plant/vehicle/used_daily
+    // Animal chain (subtype → parent, safe for all items)
     'is_animal:1':      {'is_living': 1, 'is_physical': 1,
                          'is_manmade': 0, 'is_abstract': 0,
                          'is_plant': 0, 'is_vehicle': 0,
                          'is_used_daily': 0, 'is_outdoor_item': 0},
-    // Plant → living/physical; not manmade/abstract/animal/vehicle/used_daily/outdoor
+    'is_bird:1':        {'is_animal': 1, 'is_living': 1},
+    'is_fish:1':        {'is_animal': 1, 'is_living': 1},
+    'is_insect:1':      {'is_animal': 1, 'is_living': 1},
+    'is_mammal:1':      {'is_animal': 1, 'is_living': 1},
+    'is_reptile:1':     {'is_animal': 1, 'is_living': 1},
+    // Plant chain
     'is_plant:1':       {'is_living': 1, 'is_physical': 1,
                          'is_manmade': 0, 'is_abstract': 0,
                          'is_animal': 0, 'is_vehicle': 0,
                          'is_used_daily': 0, 'is_outdoor_item': 0},
-    // Vehicle → manmade/physical/touchable; not living/abstract/animal/plant
-    'is_vehicle:1':     {'is_manmade': 1, 'is_physical': 1, 'can_be_touched': 1,
-                         'is_living': 0, 'is_abstract': 0,
-                         'is_animal': 0, 'is_plant': 0},
-    // Food → edible/physical/touchable; not living/abstract/vehicle/place
+    // Food / drink chain
     'is_food:1':        {'is_edible': 1, 'is_physical': 1, 'can_be_touched': 1,
                          'is_living': 0, 'is_abstract': 0,
                          'is_vehicle': 0, 'is_place': 0},
     'is_food_or_drink:1': {'is_edible': 1, 'is_physical': 1, 'can_be_touched': 1,
                            'is_living': 0, 'is_abstract': 0,
                            'is_vehicle': 0, 'is_place': 0},
-    // Object (holdable) → physical/touchable; not abstract/place (NOT 'not digital': tablets are objects AND digital)
+    // Object
     'is_object:1':      {'is_physical': 1, 'can_be_touched': 1,
                          'is_abstract': 0, 'is_place': 0},
-    // Brand → not living/animal/plant
+    // Vehicle
+    'is_vehicle:1':     {'is_manmade': 1, 'is_physical': 1, 'can_be_touched': 1,
+                         'is_living': 0, 'is_abstract': 0,
+                         'is_animal': 0, 'is_plant': 0},
+    // Brand
     'is_brand:1':       {'is_living': 0, 'is_animal': 0, 'is_plant': 0},
-    // Furniture → physical/manmade/touchable; not electric/motorized/handheld/phone/computer/living/food
+    // Furniture
     'is_furniture:1':   {'can_be_touched': 1, 'is_physical': 1, 'is_manmade': 1,
                          'is_living': 0, 'is_electric': 0, 'is_motorized': 0,
                          'is_handheld': 0, 'is_phone_related': 0, 'is_computer_related': 0,
                          'is_food': 0, 'is_drink': 0},
-    // Materials are NOT mutually exclusive (e.g. drills are metal+plastic, axes are metal+wood)
-    // Removed material cross-implications to prevent false eliminations of composite items
+    // Wearable chain
+    'is_clothing:1':    {'is_wearable': 1},
+    // Emotion chain
+    'is_emotion:1':     {'is_abstract': 1},
+    // Place subtypes
+    'is_city:1':        {'is_place': 1},
+    'is_country:1':     {'is_place': 1},
+    'is_building:1':    {'is_place': 1, 'is_manmade': 1},
   };
 
   // ── Bayesian constants ────────────────────────────────────────────────────
-  static const List<double> _weights   = [1.00, 0.67, 0.00, -0.67, -1.00];
+  static const List<double> _weights  = [1.00, 0.67, 0.00, -0.67, -1.00];
   static const List<double> _pGivHas  = [0.60, 0.28, 0.08,  0.03,  0.01];
   static const List<double> _pGivNot  = [0.01, 0.03, 0.08,  0.28,  0.60];
   static const double ln2 = 0.6931471805599453;
 
+  // ── Constructor ──────────────────────────────────────────────────────────
   ThingEngine(List<ThingEntry> entries, {String? forceBranch, Map<String, AnswerType>? preAnswers})
       : _all        = entries,
         _candidates = _filterByBranch(entries, forceBranch) {
+    _forceBranch = forceBranch;
     if (_candidates.isEmpty) _candidates = List<ThingEntry>.from(entries);
     for (final e in _all) {
       _scores[e]  = 0.0;
@@ -307,47 +301,42 @@ class ThingEngine {
       for (final entry in preAnswers.entries) {
         _asked.add(entry.key);
         final w = entry.value.weight;
+        final val = w > 0 ? 1 : 0;
+        if (w > 0.99 || w < -0.99) _known[entry.key] = val;
         if (w == 0.0) continue;
         if (w > 0.99) {
-          // Hard filter: remove candidates that contradict this YES answer
           _candidates = _candidates.where((c) => c.getAttribute(entry.key) == 1).toList();
         } else if (w < -0.99) {
-          // Hard filter: remove candidates that contradict this NO answer
           _candidates = _candidates.where((c) => c.getAttribute(entry.key) == 0).toList();
         } else {
-          // Soft scoring for non-definitive answers
           for (final c in _candidates) {
             final has  = c.getAttribute(entry.key) == 1;
             final sign = has ? 1.0 : -1.0;
-            final mag  = (w * sign > 0) ? 0.5 : 1.6;
+            final mag  = (w * sign > 0) ? matchMag : mismatchMag;
             _scores[c] = (_scores[c] ?? 0.0) + w * sign * mag;
           }
           _candidates = _candidates
-              .where((c) => (_scores[c] ?? 0.0) > eliminationThreshold)
+              .where((c) => (_scores[c] ?? 0.0) > _elimThreshold)
               .toList();
         }
       }
       if (_candidates.isEmpty) {
         _candidates = List<ThingEntry>.from(_filterByBranch(entries, forceBranch));
       }
-      // Propagate implication chains from definite pre-answers
+      // Propagate implications for definitive pre-answers
       for (final entry in preAnswers.entries) {
         final w = entry.value.weight;
         if (w > 0.99 || w < -0.99) {
           final impliedValue = w > 0 ? 1 : 0;
           final subs = _implications['${entry.key}:$impliedValue'];
           if (subs != null) {
-            for (final e in subs.entries) {
-              _applyImplication(e.key, e.value);
-            }
+            for (final e in subs.entries) { _applyImplication(e.key, e.value); }
           }
         }
       }
     }
 
-    // Mark attributes that are uniform across ALL branch candidates as already known.
-    // This prevents asking trivially-answered questions (e.g. "is it an animal?"
-    // when we're already in the animal branch and every candidate is one).
+    // Mark uniform attributes as already known
     if (forceBranch != null && _candidates.isNotEmpty) {
       _computeAndMarkCommonAttrs();
     }
@@ -355,10 +344,10 @@ class ThingEngine {
     _currentAttribute = _selectBestQuestion();
   }
 
-  // Detect attributes where every remaining candidate has the same value.
-  // Asking such a question provides zero information — skip it.
+  // ── Uniform-attribute detection ──────────────────────────────────────────
   void _computeAndMarkCommonAttrs() {
-    for (final attr in kAttributes) {
+    for (final def in _kDefs) {
+      final attr = def.attr;
       if (_asked.contains(attr)) continue;
       int? commonVal;
       bool allSame = true;
@@ -373,11 +362,14 @@ class ThingEngine {
       }
       if (allSame && commonVal != null) {
         _asked.add(attr);
-        // Propagate implications of this known-uniform attribute
+        _known[attr] = commonVal;
         final subs = _implications['$attr:$commonVal'];
         if (subs != null) {
           for (final e in subs.entries) {
-            if (!_asked.contains(e.key)) _asked.add(e.key);
+            if (!_asked.contains(e.key)) {
+              _asked.add(e.key);
+              _known[e.key] = e.value;
+            }
           }
         }
       }
@@ -390,7 +382,30 @@ class ThingEngine {
     return filtered.isNotEmpty ? filtered : all;
   }
 
-  // ── Probability / IG computation ──────────────────────────────────────────
+  // ── Branch → domain mapping (for domain coherence bonus) ─────────────────
+  String get _branchDomain {
+    switch (_forceBranch) {
+      case 'animal':                  return 'animal';
+      case 'plant_food':              return 'plant_food';
+      case 'vehicle':                 return 'vehicle';
+      case 'place_building':          return 'place';
+      case 'digital_product':         return 'digital';
+      case 'brand_product':           return 'brand';
+      case 'object_tool_household':   return 'object';
+      case 'abstract_concept':        return 'abstract';
+      case 'health_condition':        return 'health';
+      case 'space_thing':             return 'space';
+      case 'natural_thing':           return 'natural';
+      default:                        return 'core';
+    }
+  }
+
+  // Precondition check — always true: IG filter already avoids irrelevant
+  // questions; hard preconditions block useful questions before their
+  // prerequisite is established, wasting the question budget.
+  bool _meetsPreCondition(_QDef def) => true;
+
+  // ── Probability / IG computation ─────────────────────────────────────────
   Map<ThingEntry, double> _computeProbs() {
     if (_candidates.isEmpty) return {};
     final decay = _questionCount < 12 ? (1.0 - _questionCount / 12.0) : 0.0;
@@ -453,57 +468,93 @@ class ThingEngine {
     return hNow - expectedH;
   }
 
+  // ── Multi-factor question score ──────────────────────────────────────────
+  double _questionScore(_QDef def, double ig, double pHas) {
+    final splitBalance   = 1.0 - (pHas - 0.5).abs() * 2.0;
+    final domainCoherence = def.domain == _branchDomain ? 1.0 : 0.0;
+    final tierPriority   = (5 - def.tier) / 4.0;
+    return ig          * _wIG
+         + splitBalance * _wSplit
+         + domainCoherence * _wDomain
+         + tierPriority * _wTier
+         - def.confusion * _wConfusion;
+  }
+
+  // ── Question selection ────────────────────────────────────────────────────
   String _selectBestQuestion() {
-    final fallback = kAttributes.firstWhere(
-      (a) => !_asked.contains(a),
-      orElse: () => kAttributes.first,
-    );
+    final fallback = _kDefs
+        .firstWhere((d) => !_asked.contains(d.attr), orElse: () => _kDefs.first)
+        .attr;
     if (_candidates.length <= 1) return fallback;
     if (_candidates.length <= differentiatorAt) return _selectDifferentiator();
+
     final probs = _computeProbs();
     final hNow  = _entropy(probs.values);
     double best  = double.negativeInfinity;
     String bestA = fallback;
-    for (final attr in kAttributes) {
-      if (_asked.contains(attr)) continue;
-      final ig = _ig(attr, probs, hNow);
+
+    for (final def in _kDefs) {
+      if (_asked.contains(def.attr)) continue;
+      if (!_meetsPreCondition(def)) continue;
+      final ig = _ig(def.attr, probs, hNow);
       if (ig < 0.01) continue;
-      if (ig > best) { best = ig; bestA = attr; }
+      // pHas for split balance
+      double pHas = 0.0;
+      for (final c in _candidates) {
+        if (c.getAttribute(def.attr) == 1) pHas += probs[c] ?? 0.0;
+      }
+      final score = _questionScore(def, ig, pHas);
+      if (score > best) { best = score; bestA = def.attr; }
     }
     if (best == double.negativeInfinity) return _selectDifferentiator();
     return bestA;
   }
 
   String _selectDifferentiator() {
-    final fallback = kAttributes.firstWhere(
-      (a) => !_asked.contains(a),
-      orElse: () => kAttributes.first,
-    );
-    final top5 = rankedCandidates.take(5).map((e) => e.key).toList();
-    if (top5.length <= 1) return fallback;
-    final u = 1.0 / top5.length;
-    double best = double.negativeInfinity;
+    final fallback = _kDefs
+        .firstWhere((d) => !_asked.contains(d.attr), orElse: () => _kDefs.first)
+        .attr;
+    final ranked = rankedCandidates;
+    final top    = ranked.take(5).map((e) => e.key).toList();
+    if (top.length <= 1) return fallback;
+
+    final top1 = ranked.isNotEmpty     ? ranked[0].key : null;
+    final top2 = ranked.length > 1     ? ranked[1].key : null;
+    final top3 = ranked.length > 2     ? ranked[2].key : null;
+    final u    = 1.0 / top.length;
+
+    double best  = double.negativeInfinity;
     String bestA = fallback;
-    for (final attr in kAttributes) {
-      if (_asked.contains(attr)) continue;
+
+    for (final def in _kDefs) {
+      if (_asked.contains(def.attr)) continue;
+      if (!_meetsPreCondition(def)) continue;
       double pHas = 0.0;
-      for (final c in top5) { if (c.getAttribute(attr) == 1) pHas += u; }
+      for (final c in top) { if (c.getAttribute(def.attr) == 1) pHas += u; }
       final pNot = 1.0 - pHas;
       if (pHas < 1e-9 || pNot < 1e-9) continue;
       double ig = 0.0;
       if (pHas > 1e-15) ig -= pHas * log(pHas) / ln2;
       if (pNot > 1e-15) ig -= pNot * log(pNot) / ln2;
-      if (ig > best) { best = ig; bestA = attr; }
+
+      // Separation bonus: reward questions that distinguish top candidates
+      double sep = 0.0;
+      if (top1 != null && top2 != null &&
+          top1.getAttribute(def.attr) != top2.getAttribute(def.attr)) sep += 2.0;
+      if (top1 != null && top3 != null &&
+          top1.getAttribute(def.attr) != top3.getAttribute(def.attr)) sep += 1.2;
+
+      final score = ig + sep;
+      if (score > best) { best = score; bestA = def.attr; }
     }
     return bestA;
   }
 
-  // Apply a logically implied answer without asking the user.
-  // Hard-filters candidates that contradict the logical consequence,
-  // then recursively follows the implication chain.
+  // ── Implication propagation ───────────────────────────────────────────────
   void _applyImplication(String attr, int impliedValue) {
     if (_asked.contains(attr)) return;
     _asked.add(attr);
+    _known[attr] = impliedValue;
     if (impliedValue == 1) {
       _candidates = _candidates.where((c) => c.getAttribute(attr) == 1).toList();
     } else {
@@ -511,12 +562,11 @@ class ThingEngine {
     }
     final subs = _implications['$attr:$impliedValue'];
     if (subs != null) {
-      for (final e in subs.entries) {
-        _applyImplication(e.key, e.value);
-      }
+      for (final e in subs.entries) { _applyImplication(e.key, e.value); }
     }
   }
 
+  // ── Answer processing ─────────────────────────────────────────────────────
   void answer(AnswerType ans) {
     final attr = _currentAttribute;
     _asked.add(attr);
@@ -524,23 +574,21 @@ class ThingEngine {
     _questionCount++;
     final w = ans.weight;
     if (w != 0.0) {
+      if (w > 0.99 || w < -0.99) _known[attr] = w > 0 ? 1 : 0;
       for (final c in _candidates) {
         final has  = c.getAttribute(attr) == 1;
         final sign = has ? 1.0 : -1.0;
-        final mag  = (w * sign > 0) ? 0.5 : 1.6;
+        final mag  = (w * sign > 0) ? matchMag : mismatchMag;
         _scores[c] = (_scores[c] ?? 0.0) + w * sign * mag;
       }
       _candidates = _candidates
-          .where((c) => (_scores[c] ?? 0.0) > eliminationThreshold)
+          .where((c) => (_scores[c] ?? 0.0) > _elimThreshold)
           .toList();
-      // For definite YES/NO answers propagate logical consequences
       if (w > 0.99 || w < -0.99) {
         final impliedValue = w > 0 ? 1 : 0;
         final subs = _implications['$attr:$impliedValue'];
         if (subs != null) {
-          for (final e in subs.entries) {
-            _applyImplication(e.key, e.value);
-          }
+          for (final e in subs.entries) { _applyImplication(e.key, e.value); }
         }
       }
     }
@@ -549,6 +597,7 @@ class ThingEngine {
     }
   }
 
+  // ── Public getters ────────────────────────────────────────────────────────
   String get currentAttribute => _currentAttribute;
   String get currentQuestion  => kQuestions[_currentAttribute] ?? _currentAttribute;
   int    get questionCount    => _questionCount;
@@ -578,9 +627,10 @@ class ThingEngine {
     return r.isEmpty ? 0.0 : r.first.value;
   }
 
+  // ── Guess trigger ────────────────────────────────────────────────────────
   bool get shouldGuess {
     if (_candidates.length <= autoGuessAt) return true;
-    if (!kAttributes.any((a) => !_asked.contains(a))) return true;
+    if (!_kDefs.any((d) => !_asked.contains(d.attr))) return true;
     if (_questionCount < 3) return false;
     final top = rankedCandidates;
     if (top.isEmpty || top.length == 1) return true;

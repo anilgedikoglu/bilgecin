@@ -22,7 +22,7 @@ class UniversalEngine {
     _RoutingStep('Aklındaki şey bir kişi mi?', null, 'is_person'),
     _RoutingStep('Bir hayvan mı?', 'animal', 'is_animal'),
     // 3-5. Yiyecek / içecek / bitki
-    _RoutingStep('Yiyecek veya içecek mi?', 'plant_food', 'is_food'),
+    _RoutingStep('Yiyecek mi?', 'plant_food', 'is_food'),
     _RoutingStep('İçecek mi?', 'plant_food', 'is_drink'),
     _RoutingStep('Bir bitki mi?', 'plant_food', 'is_plant'),
     // 6. Health — abstract'tan ÖNCE (health öğeleri is_abstract=1)
