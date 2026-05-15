@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../theme/app_theme.dart';
 import '../services/data_service.dart';
 import '../services/things_data_service.dart';
@@ -8,7 +11,11 @@ import '../services/universal_engine.dart';
 import '../services/game_engine.dart' show AnswerType, AnswerTypeExt;
 import '../models/any_result.dart';
 
-const _kBtnColor = Color(0xFF7B35C0);
+const _kBg         = Color(0xFF0F0C1E);
+const _kBtnColor   = Color(0xFF7B35C0);
+const _kTextLight  = Colors.white;
+const _kSubtleText = Color(0xFF9B8EC4);
+const _kCardBg     = Color(0xFF1A1035);
 
 enum _Phase { idle, game, result }
 
@@ -26,9 +33,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   UniversalEngine? _engine;
   bool   _answered        = false;
   String _currentQuestion = '';
+  int    _questionCount   = 0; // çift→frame33, tek→frame39
 
-  late final AnimationController _pulseCtrl;
-  late final Animation<double>   _pulseAnim;
   late final AnimationController _exitCtrl;
   late final AnimationController _questionCtrl;
   late final Animation<double>   _questionFade;
@@ -37,7 +43,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late final Animation<double>   _resultFade;
   late final Animation<double>   _resultScale;
 
-  // BİLGECİN — each letter gets its own exit direction
+  // BİLGECİN — her harf farklı yönde uçar
   static const _letters = ['B', 'İ', 'L', 'G', 'E', 'C', 'İ', 'N'];
   static const _ldx     = [-40.0, -12.0, -75.0,  22.0,  65.0, -28.0,  45.0,  18.0];
   static const _ldy     = [-220.0, -300.0, -260.0, -290.0, -235.0, -320.0, -275.0, -210.0];
@@ -45,11 +51,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
-
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.95, end: 1.05)
-        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
     _exitCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
 
@@ -65,7 +66,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
-    _pulseCtrl.dispose();
     _exitCtrl.dispose();
     _questionCtrl.dispose();
     _resultCtrl.dispose();
@@ -77,7 +77,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Future<void> _startGame() async {
     if (_loading || _phase != _Phase.idle) return;
     setState(() => _loading = true);
-    _pulseCtrl.stop();
     final chars  = await DataService.loadCharacters();
     final things = await ThingsDataService.loadThings();
     if (!mounted) return;
@@ -86,6 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _loading         = false;
       _currentQuestion = _engine!.currentQuestion;
       _answered        = false;
+      _questionCount   = 0; // ilk soru → frame 33
     });
     await _exitCtrl.forward();
     if (!mounted) return;
@@ -106,6 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       setState(() {
         _currentQuestion = _engine!.currentQuestion;
         _answered        = false;
+        _questionCount++;  // yeni soru → diğer frame'e geç
       });
       _questionCtrl.forward(from: 0);
     }
@@ -115,12 +116,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _exitCtrl.reset();
     _questionCtrl.reset();
     _resultCtrl.reset();
-    _pulseCtrl.repeat(reverse: true);
     setState(() {
-      _phase    = _Phase.idle;
-      _engine   = null;
-      _answered = false;
-      _loading  = false;
+      _phase         = _Phase.idle;
+      _engine        = null;
+      _answered      = false;
+      _loading       = false;
+      _questionCount = 0;
     });
   }
 
@@ -129,17 +130,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A0A3C), Color(0xFF0F0C1E), Color(0xFF0F0C1E)],
-          ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(builder: _buildLayout),
-        ),
+      backgroundColor: _kBg,
+      body: SafeArea(
+        child: LayoutBuilder(builder: _buildLayout),
       ),
     );
   }
@@ -148,22 +141,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final h = c.maxHeight;
     final w = c.maxWidth;
 
+    // Game phase: cin biraz aşağıya kayıyor.
+    // Görsel alt kenarı = h/4 (kutu merkezi) + cinGameOffset + h*0.31 (yarı yükseklik)
+    const double cinGameFrac  = 0.035;           // aşağı kaydırma oranı
+    final double cinGameOffset = h * cinGameFrac;
+    final double cinGameBottom = h / 4 + cinGameOffset + h * 0.31; // ≈ h*0.595
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
 
-        // ── Orb (always visible) ──────────────────────────────────────────────
+        // ── Animasyon (üst yarı, her zaman görünür) ───────────────────────────
         Positioned(
-          top: h / 3 - 70, left: 0, right: 0,
-          child: Center(child: _phase == _Phase.idle
-              ? ScaleTransition(scale: _pulseAnim, child: _orbWidget())
-              : _orbWidget()),
+          top: 0, left: 0, right: 0,
+          height: h / 2,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // Karakter animasyonu
+              // idle → büyük (h*1.20) + aşağı kaydırılmış
+              // game → h*0.62, hafif aşağıya kaydırılmış
+              Transform.translate(
+                offset: Offset(0, _phase == _Phase.game ? cinGameOffset : h * 0.15),
+                child: OverflowBox(
+                  alignment: Alignment.center,
+                  maxWidth: double.infinity,
+                  maxHeight: _phase == _Phase.game ? h * 0.62 : h * 1.20,
+                  child: _CinAnimWidget(
+                    staticFrameName: _phase == _Phase.game
+                        ? (_questionCount.isEven
+                            ? 'frame_0033-Photoroom.png'
+                            : 'frame_0039-Photoroom.png')
+                        : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
 
-        // ── Animated idle elements (always in tree, animate out then stay hidden) ──
-        // BİLGECİN letters
+        // ── BİLGECİN harfleri ─────────────────────────────────────────────────
         Positioned(
-          top: h / 3 + 82, left: 0, right: 0,
+          top: h / 2 - 14, left: 0, right: 0,
           child: AnimatedBuilder(
             animation: _exitCtrl,
             builder: (_, __) {
@@ -175,15 +195,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   offset: Offset(_ldx[i] * ease, _ldy[i] * ease),
                   child: Opacity(
                     opacity: (1.0 - ease).clamp(0.0, 1.0),
-                    child: ShaderMask(
-                      shaderCallback: (b) => const LinearGradient(
-                        colors: [Color(0xFFB07FFF), Color(0xFFFFD700)],
-                      ).createShader(b),
-                      child: Text(_letters[i],
-                        style: const TextStyle(
-                          fontSize: 42, fontWeight: FontWeight.w900,
-                          color: Colors.white, letterSpacing: 6,
-                        ),
+                    child: Text(_letters[i],
+                      style: const TextStyle(
+                        fontSize: 42, fontWeight: FontWeight.w900,
+                        color: Color(0xFFFFE57F), letterSpacing: 6,
                       ),
                     ),
                   ),
@@ -193,9 +208,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
 
-        // Subtitle line 1 → flies right
+        // Subtitle 1 → sağa uçar
         Positioned(
-          top: h / 3 + 140, left: 20, right: 20,
+          top: h / 2 + 42, left: 20, right: 20,
           child: AnimatedBuilder(
             animation: _exitCtrl,
             builder: (_, __) {
@@ -205,11 +220,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 offset: Offset(w * ease, 0),
                 child: Opacity(
                   opacity: (1.0 - ease).clamp(0.0, 1.0),
-                  child: Text(
+                  child: const Text(
                     'Aklından bir şey geçir, ben bulacağım.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15,
-                        color: Colors.white.withOpacity(0.65), letterSpacing: 0.5),
+                    style: TextStyle(fontSize: 15, color: Colors.white, letterSpacing: 0.5),
                   ),
                 ),
               );
@@ -217,9 +231,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
 
-        // Subtitle line 2 ← flies left
+        // Subtitle 2 ← sola uçar
         Positioned(
-          top: h / 3 + 168, left: 20, right: 20,
+          top: h / 2 + 70, left: 20, right: 20,
           child: AnimatedBuilder(
             animation: _exitCtrl,
             builder: (_, __) {
@@ -229,11 +243,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 offset: Offset(-w * ease, 0),
                 child: Opacity(
                   opacity: (1.0 - ease).clamp(0.0, 1.0),
-                  child: Text(
+                  child: const Text(
                     'Aklını okuyacağım!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15,
-                        color: Colors.white.withOpacity(0.65), letterSpacing: 0.5),
+                    style: TextStyle(fontSize: 15, color: Colors.white, letterSpacing: 0.5),
                   ),
                 ),
               );
@@ -241,7 +254,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
 
-        // Button (fades out quickly)
+        // Başla butonu
         Positioned(
           top: h * 3 / 4 - 25, left: 56, right: 56,
           child: AnimatedBuilder(
@@ -258,11 +271,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       : FilledButton(
                           onPressed: _exitCtrl.value == 0.0 ? _startGame : null,
                           style: FilledButton.styleFrom(
+                            backgroundColor: _kBtnColor.withOpacity(0.32),
+                            side: BorderSide(color: _kBtnColor.withOpacity(0.85), width: 1.5),
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
                           ),
                           child: const Text('BİR ŞEY DÜŞÜNDÜM',
                             style: TextStyle(fontSize: 14, letterSpacing: 1.2,
-                                fontWeight: FontWeight.w700)),
+                                fontWeight: FontWeight.w700, color: Colors.white)),
                         ),
                 ),
               );
@@ -270,26 +285,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
 
-        // ── Game overlay: soru metni ─────────────────────────────────────────
+        // ── Oyun: soru baloncuğu ──────────────────────────────────────────────
         if (_phase == _Phase.game)
           Positioned(
-            top: h / 3 + 155, left: 20, right: 20,
+            top: cinGameBottom,
+            left: 16, right: 16,
             child: FadeTransition(
               opacity: _questionFade,
               child: SlideTransition(
                 position: _questionSlide,
-                child: Text(_currentQuestion,
-                  style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w700,
-                    color: Colors.white, height: 1.4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.28),
+                      width: 1.0,
+                    ),
                   ),
-                  textAlign: TextAlign.center,
+                  child: Text(
+                    _currentQuestion,
+                    style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700,
+                      color: _kTextLight, height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),
           ),
 
-        // ── Game overlay: cevap butonları (alt 1/4) ───────────────────────────
+        // ── Oyun: cevap butonları ─────────────────────────────────────────────
         if (_phase == _Phase.game)
           Positioned(
             top: h * 3 / 4, left: 20, right: 20, bottom: 16,
@@ -300,14 +328,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
           ),
 
-        // ── Result overlay ────────────────────────────────────────────────────
+        // ── Sonuç ─────────────────────────────────────────────────────────────
         if (_phase == _Phase.result)
           Positioned(
-            top: h / 3 + 90, left: 20, right: 20, bottom: 16,
+            top: h / 2 + 10, left: 20, right: 20, bottom: 16,
             child: _buildResultContent(),
           ),
 
-        // Debug button
+        // Debug butonu
         if (_phase == _Phase.game && kDebugMode)
           Positioned(
             top: 4, right: 4,
@@ -320,28 +348,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ── Orb ──────────────────────────────────────────────────────────────────────
-
-  Widget _orbWidget() => Container(
-    width: 140, height: 140,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: const RadialGradient(
-        colors: [Color(0xFFB07FFF), Color(0xFF6C3FC5), Color(0xFF2D1A6E)],
-        stops: [0.0, 0.5, 1.0],
-      ),
-      boxShadow: [BoxShadow(
-        color: const Color(0xFF6C3FC5).withOpacity(0.7),
-        blurRadius: 40, spreadRadius: 10,
-      )],
-    ),
-    child: ClipOval(child: Image.asset(
-      'assets/tamuaicons.png',
-      width: 140, height: 140,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => const SizedBox(),
-    )),
-  );
+  // ── Answer buttons ────────────────────────────────────────────────────────────
 
   Widget _buildAnswerButtons() {
     return Column(children: [
@@ -371,14 +378,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         child: Container(
           height: 46,
           decoration: BoxDecoration(
-            color: _kBtnColor.withOpacity(0.18),
+            color: _kBtnColor.withOpacity(0.15),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _kBtnColor.withOpacity(0.55), width: 1.2),
+            border: Border.all(color: _kBtnColor.withOpacity(0.7), width: 1.2),
           ),
           child: Center(child: Text(type.label,
             style: const TextStyle(
               color: Colors.white, fontSize: 14,
-              fontWeight: FontWeight.w600, letterSpacing: 0.3,
+              fontWeight: FontWeight.w700, letterSpacing: 0.3,
             ),
           )),
         ),
@@ -386,7 +393,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ── Result content ────────────────────────────────────────────────────────────
+  // ── Result ────────────────────────────────────────────────────────────────────
 
   Widget _buildResultContent() {
     final guess = _engine!.bestResult;
@@ -405,9 +412,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           width: double.infinity, height: 50,
           child: FilledButton.icon(
             onPressed: _playAgain,
-            icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+            style: FilledButton.styleFrom(backgroundColor: _kBtnColor),
+            icon: const Icon(Icons.auto_awesome_rounded, size: 20, color: Colors.white),
             label: const Text('YENİ TAHMİN',
-              style: TextStyle(fontSize: 16, letterSpacing: 2, fontWeight: FontWeight.w800)),
+              style: TextStyle(fontSize: 16, letterSpacing: 2,
+                  fontWeight: FontWeight.w800, color: Colors.white)),
           ),
         ),
       ],
@@ -422,18 +431,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [color.withOpacity(0.25), const Color(0xFF1A1035)],
+          colors: [color.withOpacity(0.18), _kCardBg],
         ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: color.withOpacity(0.5), width: 1.5),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 24, spreadRadius: 4)],
+        boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)],
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
           width: 80, height: 80,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [color.withOpacity(0.8), color.withOpacity(0.3)]),
+            gradient: RadialGradient(colors: [color.withOpacity(0.7), color.withOpacity(0.2)]),
             border: Border.all(color: color, width: 2),
           ),
           child: Center(child: Text(
@@ -444,20 +453,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         const SizedBox(height: 12),
         Text(
           guess.isPerson ? 'Düşündüğünüz kişi...' : 'Düşündüğünüz şey...',
-          style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55)),
+          style: const TextStyle(fontSize: 13, color: _kSubtleText),
         ),
         const SizedBox(height: 4),
         Text(guess.name,
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
-              color: Colors.white, letterSpacing: 0.5),
+              color: _kTextLight, letterSpacing: 0.5),
         ),
         if (guess.category.isNotEmpty) ...[
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: color.withOpacity(0.6)),
             ),
@@ -469,7 +478,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           const SizedBox(height: 6),
           Text(guess.description,
             textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5)),
+            style: const TextStyle(fontSize: 12, color: _kSubtleText),
           ),
         ],
         if (_engine!.top5Results.length > 1) ...[
@@ -477,7 +486,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           GestureDetector(
             onTap: _showAlternatives,
             child: Text('Diğer tahminler ›',
-              style: TextStyle(fontSize: 13, color: color.withOpacity(0.85),
+              style: TextStyle(fontSize: 13, color: color.withOpacity(0.9),
                   fontWeight: FontWeight.w600)),
           ),
         ],
@@ -490,7 +499,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (top5.length <= 1) return;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A0A3C),
+      backgroundColor: _kCardBg,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Padding(
@@ -500,8 +509,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(color: Colors.white24,
                 borderRadius: BorderRadius.circular(2))),
-          Text('Diğer Tahminler',
-            style: TextStyle(color: Colors.white.withOpacity(0.6),
+          const Text('Diğer Tahminler',
+            style: TextStyle(color: _kSubtleText,
                 fontSize: 13, letterSpacing: 1.5, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           ...top5.skip(1).map((r) {
@@ -510,19 +519,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               width: double.infinity, margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: c.withOpacity(0.06), borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: c.withOpacity(0.25)),
+                color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: c.withOpacity(0.3)),
               ),
               child: Row(children: [
-                CircleAvatar(radius: 20, backgroundColor: c.withOpacity(0.25),
+                CircleAvatar(radius: 20, backgroundColor: c.withOpacity(0.2),
                   child: Text(r.name.isNotEmpty ? r.name[0] : '?',
                     style: TextStyle(color: c, fontWeight: FontWeight.w900, fontSize: 16))),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(r.name, style: const TextStyle(fontSize: 14,
-                      fontWeight: FontWeight.w700, color: Colors.white)),
-                  Text(r.category, style: TextStyle(fontSize: 12,
-                      color: Colors.white.withOpacity(0.5))),
+                      fontWeight: FontWeight.w700, color: _kTextLight)),
+                  Text(r.category, style: const TextStyle(fontSize: 12, color: _kSubtleText)),
                 ])),
               ]),
             );
@@ -536,15 +544,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Widget _loadingWidget() => Container(
     decoration: BoxDecoration(
-      color: AppTheme.accent.withOpacity(0.3),
+      color: _kBtnColor.withOpacity(0.15),
       borderRadius: BorderRadius.circular(16),
     ),
     child: const Center(child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5)),
+        SizedBox(width: 20, height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: _kBtnColor)),
         SizedBox(width: 12),
-        Text('Yükleniyor...', style: TextStyle(fontSize: 15, color: Colors.white70)),
+        Text('Yükleniyor...', style: TextStyle(fontSize: 15, color: _kTextLight)),
       ],
     )),
   );
@@ -553,10 +562,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (_engine == null) return;
     final top = _engine!.rankedResults;
     showDialog(context: context, builder: (_) => AlertDialog(
-      backgroundColor: const Color(0xFF1E1840),
+      backgroundColor: _kCardBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text('Adaylar (${_engine!.candidateCount})',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          style: const TextStyle(color: _kTextLight, fontWeight: FontWeight.w800)),
       content: SizedBox(
         width: double.maxFinite,
         child: ListView.builder(
@@ -570,15 +579,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: Row(children: [
                 Container(width: 22, height: 22,
                   decoration: BoxDecoration(shape: BoxShape.circle,
-                    color: i == 0 ? _kBtnColor.withOpacity(0.3)
-                        : Colors.white.withOpacity(0.08)),
+                    color: i == 0 ? _kBtnColor.withOpacity(0.3) : Colors.white.withOpacity(0.06)),
                   child: Center(child: Text('${i+1}',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                      color: i == 0 ? _kBtnColor : Colors.white54)))),
+                      color: i == 0 ? _kBtnColor : Colors.white38)))),
                 const SizedBox(width: 10),
                 Expanded(child: Text(e.key.name,
                   style: TextStyle(fontSize: 13,
-                    color: i == 0 ? Colors.white : Colors.white70,
+                    color: i == 0 ? _kTextLight : Colors.white54,
                     fontWeight: i == 0 ? FontWeight.w700 : FontWeight.w400))),
                 Text('$pct%', style: TextStyle(fontSize: 12,
                   color: i == 0 ? _kBtnColor : Colors.white38,
@@ -626,5 +634,138 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (cat.contains('Doğa'))                                       return const Color(0xFF4ADE80);
     if (cat.contains('Uzay'))                                       return const Color(0xFF818CF8);
     return AppTheme.accent;
+  }
+}
+
+// ── Cin Animasyon Widget ──────────────────────────────────────────────────────
+// Saniyede 3 kare. Belirli karelerde duraklar:
+//   frame 2  → 2 sn
+//   frame 12 → 3 sn
+//   frame 22 → 2 sn
+//   frame 35 → 6 sn
+//   frame 39 → 6 sn
+//   frame 42 → 6 sn
+// Son kare → başa döner, sonsuz loop.
+class _CinAnimWidget extends StatefulWidget {
+  /// null → normal animasyon. Değer verilince o frame sabit gösterilir.
+  final String? staticFrameName;
+  const _CinAnimWidget({this.staticFrameName});
+  @override
+  State<_CinAnimWidget> createState() => _CinAnimWidgetState();
+}
+
+class _CinAnimWidgetState extends State<_CinAnimWidget> {
+
+  // Mevcut dosyalar (küçükten büyüğe, boşluklar atlandı)
+  static const _frameNames = [
+    'frame_0002-Photoroom.png',
+    'frame_0003-Photoroom.png',
+    'frame_0004-Photoroom.png',
+    'frame_0005-Photoroom.png',
+    'frame_0006-Photoroom.png',
+    'frame_0007-Photoroom.png',
+    'frame_0008-Photoroom.png',
+    'frame_0009-Photoroom.png',
+    'frame_0010-Photoroom.png',
+    'frame_0011-Photoroom.png',
+    'frame_0012-Photoroom.png',
+    'frame_0013-Photoroom.png',
+    'frame_0014-Photoroom.png',
+    'frame_0015-Photoroom.png',
+    'frame_0016-Photoroom.png',
+    'frame_0017-Photoroom.png',
+    'frame_0018-Photoroom.png',
+    'frame_0019-Photoroom.png',
+    'frame_0020-Photoroom.png',
+    'frame_0021-Photoroom.png',
+    'frame_0022-Photoroom.png',
+    'frame_0024-Photoroom.png',
+    'frame_0025-Photoroom.png',
+    'frame_0033-Photoroom.png',
+    'frame_0034-Photoroom.png',
+    'frame_0035-Photoroom.png',
+    'frame_0036-Photoroom.png',
+    'frame_0037-Photoroom.png',
+    'frame_0038-Photoroom.png',
+    'frame_0039-Photoroom.png',
+    'frame_0042-Photoroom.png',
+    'frame_0043-Photoroom.png',
+    'frame_0044-Photoroom.png',
+    'frame_0045-Photoroom.png',
+    'frame_0046-Photoroom.png',
+    'frame_0047-Photoroom.png',
+    'frame_0048-Photoroom.png',
+    'frame_0049-Photoroom.png',
+    'frame_0050-Photoroom.png',
+  ];
+
+  // Kare numarası → duraklatma süresi (saniye)
+  static const _pauseSecs = <int, int>{
+    2: 2, 12: 3, 22: 2, 35: 6, 39: 6, 42: 6,
+  };
+
+  int    _index = 0;
+  Timer? _timer;
+
+  // Dosya adından kare numarasını çıkar: 'frame_0002-Photoroom.png' → 2
+  static int _num(String name) => int.parse(name.substring(6, 10));
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.staticFrameName == null) _scheduleNext();
+  }
+
+  @override
+  void didUpdateWidget(_CinAnimWidget old) {
+    super.didUpdateWidget(old);
+    final wasStatic = old.staticFrameName != null;
+    final isStatic  = widget.staticFrameName != null;
+    if (!wasStatic && isStatic) {
+      // Animasyondan statik moda geçiş → timer'ı durdur
+      _timer?.cancel();
+    } else if (wasStatic && !isStatic) {
+      // Statik moddan animasyona geri dön → yeniden başlat
+      _scheduleNext();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tüm frame'leri önceden yükle (geçişlerde takılmayı önler)
+    for (final name in _frameNames) {
+      precacheImage(AssetImage('assets/cin_frames/$name'), context);
+    }
+  }
+
+  void _scheduleNext() {
+    final num   = _num(_frameNames[_index]);
+    final pause = _pauseSecs[num];
+    final delay = pause != null
+        ? Duration(seconds: pause)
+        : const Duration(milliseconds: 334); // ~3 fps
+
+    _timer = Timer(delay, () {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % _frameNames.length);
+      _scheduleNext();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.staticFrameName ?? _frameNames[_index];
+    return Image.asset(
+      'assets/cin_frames/$name',
+      fit: BoxFit.fitHeight,   // yüksekliği doldurur, genişlik orana göre açılır
+      gaplessPlayback: true,
+    );
   }
 }

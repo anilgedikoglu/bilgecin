@@ -16,38 +16,36 @@ class UniversalEngine {
   // Routing asks the broadest discriminators first.
   // 'continue' branch: YES keeps routing (no branch yet); NO skips ahead by skipOnNo steps.
   static const List<_RoutingStep> _routingSteps = [
-    // 0. Health condition BEFORE abstract (all health items have is_abstract=1)
-    _RoutingStep('Sağlıkla ilgili bir hastalık ya da belirti mi?', 'health_condition', 'is_health_condition'),
-    // 1. Symbol BEFORE abstract (all symbol items have is_abstract=1)
-    _RoutingStep('Bir sembol ya da işaret mi?', 'symbol', 'is_symbol'),
-    // 2. Abstract concept (now only ~109 true abstract items remain)
-    _RoutingStep('Soyut bir kavram veya duygu mu?', 'abstract_concept', 'is_abstract'),
-    // 3. Living/non-living; NO skips is_person+is_animal (2 steps)
+    // 0. Living — en doğal ilk soru; NO: person+animal atla (2 adım) → food'a geç
     _RoutingStep('Canlı bir şey mi?', 'continue', 'is_living', 2),
-    // 4-5. Only reached when living=YES
+    // 1-2. Yalnızca living=YES ise ulaşılır
     _RoutingStep('Aklındaki şey bir kişi mi?', null, 'is_person'),
     _RoutingStep('Bir hayvan mı?', 'animal', 'is_animal'),
-    // 6. Food
+    // 3-5. Yiyecek / içecek / bitki
     _RoutingStep('Yiyecek veya içecek mi?', 'plant_food', 'is_food'),
-    // 7. Drink (catches limonata, su, kahve etc. — is_drink=1 but is_food=0)
     _RoutingStep('İçecek mi?', 'plant_food', 'is_drink'),
-    // 8. Vehicle (before plant to handle edge-case is_plant=1 vehicles)
-    _RoutingStep('Bir taşıt mı?', 'vehicle', 'is_vehicle'),
-    // 9. Plant (flowers, trees, non-food plants)
     _RoutingStep('Bir bitki mi?', 'plant_food', 'is_plant'),
+    // 6. Health — abstract'tan ÖNCE (health öğeleri is_abstract=1)
+    _RoutingStep('Sağlıkla ilgili bir hastalık ya da belirti mi?', 'health_condition', 'is_health_condition'),
+    // 7. Symbol — abstract'tan ÖNCE (symbol öğeleri is_abstract=1)
+    _RoutingStep('Bir sembol ya da işaret mi?', 'symbol', 'is_symbol'),
+    // 8. Abstract
+    _RoutingStep('Soyut bir kavram veya duygu mu?', 'abstract_concept', 'is_abstract'),
+    // 9. Vehicle
+    _RoutingStep('Bir taşıt mı?', 'vehicle', 'is_vehicle'),
     // 10. Place
     _RoutingStep('Bir yer mi?', 'place_building', 'is_place'),
     // 11. Digital
     _RoutingStep('Elektronik cihaz veya yazılım mı?', 'digital_product', 'is_digital'),
     // 12. Brand
     _RoutingStep('Bir marka mı?', 'brand_product', 'is_brand'),
-    // 13. Physical holdable object
+    // 13. Object
     _RoutingStep('Elle tutulabilen bir nesne mi?', 'object_tool_household', 'is_object'),
-    // 14. Mythical/fictional being (AFTER is_object so fictional objects go to OTH)
+    // 14. Mythical/fictional
     _RoutingStep('Kurgusal veya efsanevi bir varlık mı?', 'mythical_symbolic_being', 'is_fictional'),
-    // 15. Space things
+    // 15. Space
     _RoutingStep('Uzayla ilgili bir şey mi?', 'space_thing', 'is_space_related'),
-    // 16. Natural phenomena (göl, dağ, yağmur, şimşek, etc.)
+    // 16. Natural
     _RoutingStep('Doğada bulunan bir fenomen mi?', 'natural_thing', 'is_found_in_nature'),
   ];
 

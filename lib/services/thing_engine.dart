@@ -43,21 +43,23 @@ class ThingEngine {
     // Tech domain
     'is_phone_related', 'is_computer_related',
     'is_game_related', 'is_app_related', 'is_social_media',
-    'is_software', 'is_mobile_app', 'is_video_game', 'is_board_game',
+    'is_software', 'is_mobile_app', 'is_video_game', 'is_board_game', 'is_online_service', 'is_internet_related',
     'is_car_brand', 'is_car_model',
     // Tool domain
-    'is_tool_for_repair', 'is_cutting_tool', 'is_writing_tool',
+    'is_tool_for_repair', 'is_cutting_tool', 'is_holding_tool', 'is_measuring_tool',
+    'is_cleaning_tool', 'is_writing_tool',
     'is_cooking_tool', 'is_eating_tool',
     // More physical
     'is_edible',
-    'is_bathroom_item', 'is_bedroom_item', 'is_outdoor_item',
+    'is_bathroom_item', 'is_bedroom_item', 'is_living_room_item', 'is_outdoor_item',
+    'is_wrist_worn',
     // Animal domain
     'is_pet', 'is_wild_animal', 'is_farm_animal',
     'can_fly', 'lives_in_water', 'is_insect', 'is_mammal',
     'is_bird', 'is_reptile', 'is_fish',
     // Plant / food domain
     'is_fruit', 'is_vegetable', 'is_tree', 'is_flower', 'is_spice',
-    'is_sweet', 'is_sour', 'is_liquid',
+    'is_sweet', 'is_sour', 'is_liquid', 'is_alcoholic', 'is_carbonated',
     // Material
     'is_metal', 'is_wood', 'is_plastic', 'is_glass',
     'is_fabric', 'is_leather', 'is_paper',
@@ -77,8 +79,6 @@ class ThingEngine {
     'is_sport_related', 'is_music_related', 'is_school_related',
     'is_child_friendly', 'is_turkish', 'is_global',
     'is_used_for_fun', 'is_used_for_work',
-    // Popularity
-    'popularity_high',
   ];
 
   // ── Turkish questions ─────────────────────────────────────────────────────
@@ -133,10 +133,15 @@ class ThingEngine {
     'is_mobile_app':            'Bu şey bir mobil uygulama mı?',
     'is_video_game':            'Bu şey bir video oyunu mu?',
     'is_board_game':            'Bu şey bir masa oyunu mu?',
+    'is_online_service':        'Bu şey internette çalışan bir servis mi? (web sitesi veya bulut uygulama)',
+    'is_internet_related':      'Bu şey internetle bağlantılı mı?',
     'is_car_brand':             'Bu şey bir araba markası mı?',
     'is_car_model':             'Bu şey belirli bir araba modeli mi?',
     'is_tool_for_repair':       'Bu şey tamir veya inşaat işlerinde kullanılır mı?',
     'is_cutting_tool':          'Bu şey kesmek için kullanılır mı?',
+    'is_holding_tool':          'Bu şey bir şeyleri tutmak veya kavramak için mi kullanılır?',
+    'is_measuring_tool':        'Bu şey ölçmek için mi kullanılır?',
+    'is_cleaning_tool':         'Bu şey temizlemek için mi kullanılır?',
     'is_writing_tool':          'Bu şey yazmak için kullanılır mı?',
     'is_cooking_tool':          'Bu şey yemek pişirmek için mi kullanılır?',
     'is_eating_tool':           'Bu şey yemek yemek için mi kullanılır?',
@@ -151,7 +156,9 @@ class ThingEngine {
     'is_dangerous':             'Bu şey tehlikeli olabilir mi?',
     'is_bathroom_item':         'Bu şey banyoda bulunur mu?',
     'is_bedroom_item':          'Bu şey yatak odasında bulunur mu?',
+    'is_living_room_item':      'Bu şey oturma odasında bulunur mu?',
     'is_outdoor_item':          'Bu şey genellikle dışarıda kullanılır mı?',
+    'is_wrist_worn':            'Bu şey bilek veya kola takılır mı?',
     'is_pet':                   'Bu şey evcil hayvan mı?',
     'is_wild_animal':           'Bu şey vahşi/yabani bir hayvan mı?',
     'is_farm_animal':           'Bu şey çiftlik hayvanı mı?',
@@ -202,6 +209,8 @@ class ThingEngine {
     'is_symbol':                'Bu şey bir sembol mü?',
     'is_health_related':        'Bu şey sağlıkla ilgili mi?',
     'is_health_condition':      'Bu şey bir hastalık veya sağlık durumu mu?',
+    'is_alcoholic':             'Bu şey alkol içeriyor mu?',
+    'is_carbonated':            'Bu şey gazlı mı?',
     'is_sport_related':         'Bu şey sporla ilgili mi?',
     'is_music_related':         'Bu şey müzikle ilgili mi?',
     'is_school_related':        'Bu şey okul veya eğitimle ilgili mi?',
@@ -210,7 +219,6 @@ class ThingEngine {
     'is_global':                'Bu şey dünya genelinde çok bilinen bir şey mi?',
     'is_used_for_fun':          'Bu şey eğlence amaçlı mı?',
     'is_used_for_work':         'Bu şey iş veya çalışma amacıyla kullanılır mı?',
-    'popularity_high':          'Bu şey çok popüler ve bilinen bir şey mi?',
   };
 
   // ── Logical implication table ─────────────────────────────────────────────
@@ -244,14 +252,16 @@ class ThingEngine {
     // Place → not handheld/object/living/food/vehicle
     'is_place:1':       {'is_handheld': 0, 'is_object': 0, 'is_living': 0,
                          'is_food': 0, 'is_vehicle': 0},
-    // Animal → living/physical; not manmade/abstract/plant/vehicle
+    // Animal → living/physical; not manmade/abstract/plant/vehicle/used_daily
     'is_animal:1':      {'is_living': 1, 'is_physical': 1,
                          'is_manmade': 0, 'is_abstract': 0,
-                         'is_plant': 0, 'is_vehicle': 0},
-    // Plant → living/physical; not manmade/abstract/animal/vehicle
+                         'is_plant': 0, 'is_vehicle': 0,
+                         'is_used_daily': 0, 'is_outdoor_item': 0},
+    // Plant → living/physical; not manmade/abstract/animal/vehicle/used_daily/outdoor
     'is_plant:1':       {'is_living': 1, 'is_physical': 1,
                          'is_manmade': 0, 'is_abstract': 0,
-                         'is_animal': 0, 'is_vehicle': 0},
+                         'is_animal': 0, 'is_vehicle': 0,
+                         'is_used_daily': 0, 'is_outdoor_item': 0},
     // Vehicle → manmade/physical/touchable; not living/abstract/animal/plant
     'is_vehicle:1':     {'is_manmade': 1, 'is_physical': 1, 'can_be_touched': 1,
                          'is_living': 0, 'is_abstract': 0,
@@ -273,21 +283,8 @@ class ThingEngine {
                          'is_living': 0, 'is_electric': 0, 'is_motorized': 0,
                          'is_handheld': 0, 'is_phone_related': 0, 'is_computer_related': 0,
                          'is_food': 0, 'is_drink': 0},
-    // Material mutual exclusions — if made of X, not made of other materials
-    'is_wood:1':     {'is_plastic': 0, 'is_metal': 0, 'is_glass': 0,
-                      'is_fabric': 0, 'is_leather': 0, 'is_paper': 0},
-    'is_plastic:1':  {'is_wood': 0, 'is_metal': 0, 'is_glass': 0,
-                      'is_fabric': 0, 'is_leather': 0, 'is_paper': 0},
-    'is_metal:1':    {'is_wood': 0, 'is_plastic': 0, 'is_glass': 0,
-                      'is_fabric': 0, 'is_leather': 0, 'is_paper': 0},
-    'is_glass:1':    {'is_wood': 0, 'is_plastic': 0, 'is_metal': 0,
-                      'is_fabric': 0, 'is_leather': 0, 'is_paper': 0},
-    'is_fabric:1':   {'is_wood': 0, 'is_plastic': 0, 'is_metal': 0,
-                      'is_glass': 0, 'is_leather': 0, 'is_paper': 0},
-    'is_leather:1':  {'is_wood': 0, 'is_plastic': 0, 'is_metal': 0,
-                      'is_glass': 0, 'is_fabric': 0, 'is_paper': 0},
-    'is_paper:1':    {'is_wood': 0, 'is_plastic': 0, 'is_metal': 0,
-                      'is_glass': 0, 'is_fabric': 0, 'is_leather': 0},
+    // Materials are NOT mutually exclusive (e.g. drills are metal+plastic, axes are metal+wood)
+    // Removed material cross-implications to prevent false eliminations of composite items
   };
 
   // ── Bayesian constants ────────────────────────────────────────────────────
