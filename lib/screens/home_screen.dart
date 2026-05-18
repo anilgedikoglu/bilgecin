@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -28,12 +29,38 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin {
 
+  // ── Soru üstü görseller ───────────────────────────────────────────────────────
+  static const _kCinFrames = ['frame_0033-Photoroom.png', 'frame_0039-Photoroom.png'];
+  static const _kSoruGorselleri = [
+    'frame_0033-Photoroom.png',
+    'frame_0039-Photoroom.png',
+    'assets/soru_gorselleri/sg1.png',
+    'assets/soru_gorselleri/sg2.png',
+    'assets/soru_gorselleri/sg3.png',
+    'assets/soru_gorselleri/sg4.png',
+    'assets/soru_gorselleri/sg5.png',
+    'assets/soru_gorselleri/sg6.png',
+    'assets/soru_gorselleri/sg7.png',
+    'assets/soru_gorselleri/sg8.png',
+    'assets/soru_gorselleri/sg9.png',
+  ];
+  String _topImage = 'frame_0033-Photoroom.png';
+  final  _rng      = Random();
+
+  String _pickNextTopImage() {
+    String next;
+    do {
+      next = _kSoruGorselleri[_rng.nextInt(_kSoruGorselleri.length)];
+    } while (next == _topImage && _kSoruGorselleri.length > 1);
+    return next;
+  }
+
   _Phase _phase   = _Phase.idle;
   bool   _loading = false;
   UniversalEngine? _engine;
   bool   _answered        = false;
   String _currentQuestion = '';
-  int    _questionCount   = 0; // çift→frame33, tek→frame39
+  int    _questionCount   = 0;
 
   late final AnimationController _exitCtrl;
   late final AnimationController _questionCtrl;
@@ -81,11 +108,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final things = await ThingsDataService.loadThings();
     if (!mounted) return;
     _engine = UniversalEngine(chars, things);
+    final firstImage = _pickNextTopImage();
+    debugPrint('HOME_GORSEL_ILKSORU: $firstImage  (liste: ${_kSoruGorselleri.length})');
     setState(() {
+      _topImage        = firstImage;
       _loading         = false;
       _currentQuestion = _engine!.currentQuestion;
       _answered        = false;
-      _questionCount   = 0; // ilk soru → frame 33
+      _questionCount   = 0;
     });
     await _exitCtrl.forward();
     if (!mounted) return;
@@ -103,10 +133,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       setState(() => _phase = _Phase.result);
       _resultCtrl.forward(from: 0);
     } else {
+      final nextImage = _pickNextTopImage();
+      debugPrint('HOME_GORSEL_SONRAKI: $nextImage');
       setState(() {
+        _topImage        = nextImage;
         _currentQuestion = _engine!.currentQuestion;
         _answered        = false;
-        _questionCount++;  // yeni soru → diğer frame'e geç
+        _questionCount++;
       });
       _questionCtrl.forward(from: 0);
     }
@@ -159,27 +192,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              // Karakter animasyonu
-              // idle → büyük (h*1.20) + aşağı kaydırılmış
-              // game → h*0.62, hafif aşağıya kaydırılmış
-              Transform.translate(
-                offset: Offset(0, _phase == _Phase.game ? cinGameOffset : h * 0.15),
-                child: OverflowBox(
-                  alignment: Alignment.center,
-                  maxWidth: double.infinity,
-                  maxHeight: _phase == _Phase.game ? h * 0.62 : h * 1.20,
-                  child: _CinAnimWidget(
-                    staticFrameName: _phase == _Phase.game
-                        ? (_questionCount.isEven
-                            ? 'frame_0033-Photoroom.png'
-                            : 'frame_0039-Photoroom.png')
-                        : null,
+              // Soru üstü görsel: sg1-9 — _CinAnimWidget ile birebir aynı layout
+              if (_phase == _Phase.game && !_kCinFrames.contains(_topImage))
+                Transform.translate(
+                  offset: Offset(0, cinGameOffset),
+                  child: OverflowBox(
+                    alignment: Alignment.center,
+                    maxWidth: double.infinity,
+                    maxHeight: h * 0.62,
+                    child: Image.asset(
+                      _topImage,
+                      fit: BoxFit.fitHeight,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, __, ___) =>
+                          Container(color: const Color(0xFF0F0C1E)),
+                    ),
                   ),
                 ),
-              ),
+              // Cin karakteri: idle, result veya cin frame seçiliyken göster
+              if (_phase != _Phase.game || _kCinFrames.contains(_topImage))
+                Transform.translate(
+                  offset: Offset(0, _phase == _Phase.game ? cinGameOffset : h * 0.15),
+                  child: OverflowBox(
+                    alignment: Alignment.center,
+                    maxWidth: double.infinity,
+                    maxHeight: _phase == _Phase.game ? h * 0.62 : h * 1.20,
+                    child: _CinAnimWidget(
+                      staticFrameName: _phase == _Phase.game ? _topImage : null,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
+
+        // ── Gradient overlay — game modunda cin+sg alt geçişi ─────────────────
+        if (_phase == _Phase.game)
+          Positioned(
+            top: h * 0.26,
+            left: 0, right: 0,
+            height: cinGameBottom - h * 0.26,
+            child: const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.0, 0.6, 1.0],
+                    colors: [
+                      Colors.transparent,
+                      Color(0x77000000),
+                      Color(0xFF0F0C1E),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
 
         // ── BİLGECİN harfleri ─────────────────────────────────────────────────
         Positioned(
@@ -335,13 +404,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             child: _buildResultContent(),
           ),
 
-        // Debug butonu
+        // Debug butonu + görsel adı
         if (_phase == _Phase.game && kDebugMode)
           Positioned(
             top: 4, right: 4,
-            child: IconButton(
-              icon: const Icon(Icons.bug_report_rounded, color: Colors.white24),
-              onPressed: _showDebug,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.bug_report_rounded, color: Colors.white24),
+                  onPressed: _showDebug,
+                ),
+                Container(
+                  color: Colors.black87,
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text(
+                    _topImage.split('/').last,
+                    style: const TextStyle(color: Colors.yellow, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ),
           ),
       ],

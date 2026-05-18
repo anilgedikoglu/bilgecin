@@ -43,7 +43,7 @@ class ThingEngine {
   // Multi-factor scoring weights — IG dominates; others are gentle tiebreakers
   static const double _wIG        = 1.0;
   static const double _wSplit     = 0.2;   // mild balance correction
-  static const double _wDomain    = 0.1;   // very weak domain hint
+  static const double _wDomain    = 0.30;  // domain coherence — cross-domain soruları geri iter
   static const double _wTier      = 0.15;  // prefer earlier-tier questions
   static const double _wConfusion = 0.15;  // mild confusion penalty
 
@@ -87,7 +87,7 @@ class ThingEngine {
     _QDef('is_small',        'Bu şey küçük mü?',                                 'core',   3),
     _QDef('is_large',        'Bu şey büyük mü?',                                 'core',   3),
     _QDef('is_used_daily',   'Bu şey günlük hayatta sık kullanılır mı?',         'core',   3),
-    _QDef('is_found_in_nature','Bu şey doğada bulunur mu?',                      'natural', 3),
+    _QDef('is_found_in_nature','Bu şeye bu şekliyle bir yerde rastlayabilir misin?', 'natural', 3),
     _QDef('can_move_by_itself','Bu şey kendi kendine hareket edebilir mi?',      'core',    3),
     _QDef('is_motorized',    'Bu şey motorlu mu?',                               'vehicle', 3),
     _QDef('is_dangerous',    'Bu şey tehlikeli olabilir mi?',                    'core',    4),
@@ -132,7 +132,7 @@ class ThingEngine {
     _QDef('is_bathroom_item','Bu şey banyoda bulunur mu?',                       'object', 4),
     _QDef('is_bedroom_item', 'Bu şey yatak odasında bulunur mu?',                'object', 4),
     _QDef('is_living_room_item','Bu şey oturma odasında bulunur mu?',            'object', 4),
-    _QDef('is_outdoor_item', 'Bu şey genellikle dışarıda kullanılır mı?',        'object', 4),
+    _QDef('is_outdoor_item', 'Bu şey bir "ev dışı" eşyası mı?',                  'object', 4),
     _QDef('is_wrist_worn',   'Bu şey bilek veya kola takılır mı?',               'object', 4, reqAny: ['is_wearable:1', 'is_watch_related:1']),
     // ── Animal domain (tier 4, unlocked by is_animal:1) ───────────────────
     _QDef('is_pet',          'Bu şey evcil hayvan mı?',                          'animal', 4, reqAny: ['is_animal:1']),
@@ -145,6 +145,20 @@ class ThingEngine {
     _QDef('is_bird',         'Bu şey bir kuş mu?',                               'animal', 4, reqAny: ['is_animal:1']),
     _QDef('is_reptile',      'Bu şey bir sürüngen mi?',                          'animal', 4, reqAny: ['is_animal:1']),
     _QDef('is_fish',         'Bu şey bir balık mı?',                             'animal', 4, reqAny: ['is_animal:1']),
+    // ── Dog / cat species (tier 5) ────────────────────────────────────────────
+    _QDef('is_dog',          'Bu şey bir köpek mi?',                             'animal', 5, reqAny: ['is_mammal:1']),
+    _QDef('is_cat',          'Bu şey bir kedi mi?',                              'animal', 5, reqAny: ['is_mammal:1']),
+    // ── Dog breed type (tier 6, unlocked by is_dog:1) ─────────────────────────
+    _QDef('is_herding_dog',  'Bu köpek çoban veya güdüm köpeği mi?',            'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('is_guard_dog',    'Bu köpek koruma veya bekçi köpeği mi?',            'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('is_retriever_dog','Bu köpek bir retriever (getirici) cinsi mi?',      'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('is_sled_dog',     'Bu köpek kızak çeken bir cins mi?',               'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('is_hunting_dog',  'Bu köpek av için kullanılan bir cins mi?',         'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('is_toy_breed',    'Bu köpek çok küçük (oyuncak boy) bir cins mi?',   'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('is_terrier',      'Bu köpek bir terrier cinsi mi?',                   'animal', 6, reqAny: ['is_dog:1']),
+    _QDef('has_long_coat',   'Bu hayvanın uzun tüyleri var mı?',                'animal', 5, reqAny: ['is_animal:1']),
+    _QDef('has_flat_face',   'Bu hayvanın basık/yassı yüzü var mı?',            'animal', 6, reqAny: ['is_mammal:1']),
+    _QDef('has_floppy_ears', 'Bu hayvanın sarkık kulakları var mı?',            'animal', 5, reqAny: ['is_animal:1']),
     // ── Plant / food domain (tier 4, unlocked) ────────────────────────────
     _QDef('is_fruit',        'Bu şey bir meyve mi?',                             'plant_food', 4, reqAny: ['is_food:1', 'is_plant:1', 'is_edible:1']),
     _QDef('is_vegetable',    'Bu şey bir sebze mi?',                             'plant_food', 4, reqAny: ['is_food:1', 'is_plant:1', 'is_edible:1']),
@@ -156,6 +170,8 @@ class ThingEngine {
     _QDef('is_liquid',       'Bu şey sıvı mı?',                                  'plant_food', 3),
     _QDef('is_alcoholic',    'Bu şey alkol içeriyor mu?',                        'plant_food', 4, reqAny: ['is_drink:1', 'is_liquid:1']),
     _QDef('is_carbonated',   'Bu şey gazlı mı?',                                 'plant_food', 4, reqAny: ['is_drink:1', 'is_liquid:1']),
+    _QDef('is_meat',         'Bu şey et ürünü mü?',                              'plant_food', 4, reqAny: ['is_food:1', 'is_edible:1']),
+    _QDef('is_dairy',        'Bu şey süt ürünü mü?',                             'plant_food', 4, reqAny: ['is_food:1', 'is_edible:1']),
     // ── Material (tier 4) ─────────────────────────────────────────────────
     _QDef('is_metal',        'Bu şey metalden yapılmış mı?',                     'material', 4),
     _QDef('is_wood',         'Bu şey ahşaptan yapılmış mı?',                     'material', 4),
@@ -168,18 +184,33 @@ class ThingEngine {
     _QDef('is_weather_related','Bu şey bir hava olayıyla ilgili mi?',            'natural', 3),
     _QDef('is_sky_related',  'Bu şey gökyüzüyle ilgili mi?',                     'natural', 4),
     _QDef('is_space_related','Bu şey uzayla ilgili mi?',                         'space',   3),
+    _QDef('is_planet',       'Bu şey bir gezegen mi?',                           'space',   4, reqAny: ['is_space_related:1']),
+    _QDef('is_star',         'Bu şey bir yıldız mı?',                            'space',   4, reqAny: ['is_space_related:1']),
+    _QDef('is_moon_satellite','Bu şey bir doğal uydu mu?',                       'space',   4, reqAny: ['is_space_related:1']),
+    _QDef('is_galaxy',       'Bu şey bir galaksi mi?',                           'space',   4, reqAny: ['is_space_related:1']),
+    _QDef('is_constellation','Bu şey bir takımyıldız mı?',                       'space',   4, reqAny: ['is_space_related:1']),
+    _QDef('is_astronomical_event','Bu şey astronomik bir olay mı?',              'space',   4, reqAny: ['is_space_related:1']),
     _QDef('is_water_related','Bu şey suyla ilgili mi?',                          'natural', 3),
     _QDef('is_fire_related', 'Bu şey ateşle ilgili mi?',                         'natural', 4),
     _QDef('is_air_related',  'Bu şey havayla veya uçuşla ilgili mi?',            'natural', 4),
     _QDef('is_earth_related','Bu şey toprak veya zemin işlemeyle ilgili mi?',    'natural', 4),
-    _QDef('is_hot',          'Bu şey sıcak mı?',                                 'natural', 4, confusion: 0.2),
-    _QDef('is_cold',         'Bu şey soğuk mu?',                                 'natural', 4, confusion: 0.2),
+    _QDef('is_hot',          'Bu şey sıcak mı?',                                 'plant_food', 4, confusion: 0.2),
+    _QDef('is_cold',         'Bu şey soğuk mu?',                                 'plant_food', 4, confusion: 0.2),
     // ── Place domain (tier 4, unlocked by is_place:1) ─────────────────────
     _QDef('is_city',         'Bu şey bir şehir mi?',                             'place', 4, reqAny: ['is_place:1']),
     _QDef('is_country',      'Bu şey bir ülke mi?',                              'place', 4, reqAny: ['is_place:1']),
     _QDef('is_building',     'Bu şey bir bina veya yapı mı?',                    'place', 4, reqAny: ['is_place:1']),
     _QDef('is_natural_place','Bu şey doğal bir yer mi? (dağ, deniz, orman...)',  'place', 4, reqAny: ['is_place:1']),
-    _QDef('is_historical_place','Bu şey tarihi bir yer mi?',                     'place', 5, reqAny: ['is_place:1', 'is_building:1']),
+    _QDef('is_historical_place','Bu şey tarihi bir yer mi?',                     'place', 5, reqAny: ['is_place:1']),
+    _QDef('is_coastal',      'Bu şey kıyı kenti veya yeri mi?',                 'place', 5, reqAny: ['is_place:1', 'is_city:1']),
+    _QDef('is_tourist_place','Bu şey turistik bir yer mi?',                     'place', 5, reqAny: ['is_place:1']),
+    _QDef('is_in_marmara',   'Bu şey Marmara bölgesinde mi?',                   'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
+    _QDef('is_in_aegean',    'Bu şey Ege bölgesinde mi?',                       'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
+    _QDef('is_in_mediterranean','Bu şey Akdeniz bölgesinde mi?',                'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
+    _QDef('is_in_blacksea',  'Bu şey Karadeniz bölgesinde mi?',                 'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
+    _QDef('is_in_central_anatolia','Bu şey İç Anadolu bölgesinde mi?',          'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
+    _QDef('is_in_eastern_anatolia','Bu şey Doğu Anadolu bölgesinde mi?',        'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
+    _QDef('is_in_southeastern_anatolia','Bu şey Güneydoğu Anadolu bölgesinde mi?', 'place', 6, reqAny: ['is_city:1', 'is_turkish:1']),
     // ── Abstract / emotion (tier 4, mostly unlocked by is_abstract:1) ─────
     _QDef('is_emotion',      'Bu şey bir duygu mu?',                             'abstract', 4, reqAny: ['is_abstract:1']),
     _QDef('is_positive',     'Bu şey genel olarak olumlu bir şey mi?',           'abstract', 4, reqAny: ['is_abstract:1', 'is_emotion:1']),
@@ -190,11 +221,31 @@ class ThingEngine {
     _QDef('is_religious_or_spiritual','Bu şey dini veya manevi bir şey mi?',     'abstract', 3),
     _QDef('is_money_related','Bu şey parayla ilgili mi?',                        'abstract', 4),
     _QDef('is_symbol',       'Bu şey bir sembol mü?',                            'abstract', 3),
+    _QDef('is_traffic_sign',       'Bu şey bir trafik/yol işareti mi?',           'abstract', 4, reqAny: ['is_symbol:1']),
+    _QDef('is_math_symbol',        'Bu şey bir matematik sembolü mü?',            'abstract', 4, reqAny: ['is_symbol:1']),
+    _QDef('is_currency_symbol',    'Bu şey bir para birimi sembolü mü?',          'abstract', 5, reqAny: ['is_symbol:1']),
+    _QDef('is_social_media_symbol','Bu şey bir sosyal medya sembolü mü?',         'abstract', 5, reqAny: ['is_symbol:1']),
+    _QDef('is_emoji_related',      'Bu şey bir emoji mi?',                        'abstract', 5, reqAny: ['is_symbol:1']),
+    _QDef('is_biology_related','Bu şey biyolojiyle ilgili mi?',                  'abstract', 4),
+    _QDef('is_physics_related','Bu şey fizikle ilgili mi?',                      'abstract', 4),
+    _QDef('is_psychology_related','Bu şey psikoloji veya davranışla ilgili mi?', 'abstract', 4),
+    _QDef('is_economy_related','Bu şey ekonomiyle ilgili mi?',                   'abstract', 4),
     // ── Health (tier 3-4) ─────────────────────────────────────────────────
     _QDef('is_health_related','Bu şey sağlıkla ilgili mi?',                      'health', 3),
     _QDef('is_health_condition','Bu şey bir hastalık veya sağlık durumu mu?',    'health', 4, reqAny: ['is_health_related:1']),
+    _QDef('is_chronic',      'Bu şey kronik bir hastalık mı?',                   'health', 4, reqAny: ['is_health_condition:1']),
+    _QDef('is_contagious',   'Bu şey bulaşıcı mı?',                              'health', 4, reqAny: ['is_health_condition:1']),
+    _QDef('is_mental_health','Bu şey ruh sağlığıyla ilgili mi?',                 'health', 4, reqAny: ['is_health_related:1']),
+    _QDef('is_neurological', 'Bu şey nörolojik bir hastalık mı?',                'health', 4, reqAny: ['is_health_condition:1']),
+    _QDef('is_cancer',       'Bu şey bir kanser türü mü?',                       'health', 4, reqAny: ['is_health_condition:1']),
+    _QDef('is_respiratory',  'Bu şey solunum sistemi hastalığı mı?',             'health', 5, reqAny: ['is_health_condition:1']),
+    _QDef('is_digestive',    'Bu şey sindirim sistemi hastalığı mı?',            'health', 5, reqAny: ['is_health_condition:1']),
+    _QDef('is_skin_related', 'Bu şey bir cilt hastalığı mı?',                    'health', 5, reqAny: ['is_health_condition:1']),
+    _QDef('is_bone_joint',   'Bu şey bir kemik veya eklem hastalığı mı?',        'health', 5, reqAny: ['is_health_condition:1']),
+    _QDef('is_acute',        'Bu şey ani başlayan (akut) bir hastalık mı?',      'health', 5, reqAny: ['is_health_condition:1']),
+    _QDef('is_pain_related', 'Bu şey ağrı veya acıyla ilgili mi?',               'health', 5, reqAny: ['is_health_condition:1']),
     // ── Context / cross-domain (tier 3-4) ─────────────────────────────────
-    _QDef('is_sport_related','Bu şey sporla ilgili mi?',                         'core', 3),
+    _QDef('is_sport_related','Bu şey özellikle bir spor dalıyla özdeşleşmiş mi?', 'core', 3),
     _QDef('is_music_related','Bu şey müzikle ilgili mi?',                        'core', 3),
     _QDef('is_school_related','Bu şey okul veya eğitimle ilgili mi?',            'core', 4),
     _QDef('is_child_friendly','Bu şey çocuklar için uygun mu?',                  'core', 4),
@@ -202,6 +253,27 @@ class ThingEngine {
     _QDef('is_global',       'Bu şey dünya genelinde çok bilinen bir şey mi?',   'core', 4),
     _QDef('is_used_for_fun', 'Bu şey eğlence amaçlı mı?',                       'core', 3),
     _QDef('is_used_for_work','Bu şey iş veya çalışma amacıyla kullanılır mı?',  'core', 4),
+    // ── Yeni genel attribute'lar (tier 3-4) ───────────────────────────────────
+    _QDef('has_screen',           'Bu şeyin bir ekranı var mı?',                'object',  3),
+    _QDef('is_toy',               'Bu şey bir oyuncak mı?',                     'object',  3),
+    _QDef('is_medicine_related',  'Bu şey tıp veya ilaçla ilgili mi?',          'health',  3),
+    _QDef('produces_light',       'Bu şey ışık veya aydınlatma sağlar mı?',     'object',  4),
+    _QDef('produces_sound',       'Bu şey ses çıkarır mı?',                     'object',  4),
+    _QDef('is_for_hygiene',       'Bu şey temizlik veya hijyen için mi?',        'object',  4),
+    _QDef('is_sharp',             'Bu şey keskin veya sivri uçlu mu?',           'object',  4),
+    _QDef('is_flat',              'Bu şey düz/yassı bir şekle sahip mi?',        'object',  4),
+    _QDef('is_round',             'Bu şey yuvarlak mı?',                         'core',    4),
+    _QDef('is_transparent',       'Bu şey şeffaf veya saydam mı?',               'object',  4),
+    _QDef('is_food_container',    'Bu şey yiyecek/içecek saklamak için mi?',     'object',  4, reqAny: ['is_kitchen:1', 'is_object:1']),
+    _QDef('is_single_use',        'Bu şey tek kullanımlık mı?',                  'object',  4),
+    _QDef('is_for_garden',        'Bu şey bahçe işleri için mi?',                'object',  4),
+    _QDef('is_for_decoration',    'Bu şey süsleme veya dekorasyon için mi?',     'object',  4),
+    _QDef('is_battery_powered',   'Bu şey pille çalışır mı?',                    'object',  4, reqAny: ['is_electric:1', 'is_object:1']),
+    _QDef('is_thrown_or_hit',     'Bu şey fırlatılarak veya vurularak kullanılır mı?', 'object', 4),
+    _QDef('is_for_hair',          'Bu şey saçla ilgili mi?',                     'object',  4),
+    _QDef('is_for_writing_surface','Bu şey üzerine yazı yazılabilir mi?',         'object',  4),
+    _QDef('is_worn_on_head',      'Bu şey başa takılır veya giyilir mi?',         'object',  4, reqAny: ['is_wearable:1', 'is_object:1']),
+    _QDef('is_worn_on_feet',      'Bu şey ayağa giyilir mi?',                    'object',  4, reqAny: ['is_wearable:1', 'is_object:1']),
   ];
 
   // Public backward-compat lists derived from _kDefs
@@ -237,7 +309,15 @@ class ThingEngine {
     'is_animal:1':      {'is_living': 1, 'is_physical': 1,
                          'is_manmade': 0, 'is_abstract': 0,
                          'is_plant': 0, 'is_vehicle': 0,
-                         'is_used_daily': 0, 'is_outdoor_item': 0},
+                         'is_food': 0, 'is_drink': 0, 'is_food_or_drink': 0,
+                         'is_used_daily': 0, 'is_outdoor_item': 0,
+                         // Yiyecek bağlamı — hayvan için anlamsız
+                         'is_cold': 0, 'is_hot': 0, 'is_liquid': 0,
+                         'is_kitchen': 0, 'is_edible': 0,
+                         // Nesne/yer bağlamı
+                         'is_school_related': 0, 'is_furniture': 0,
+                         'is_bathroom_item': 0, 'is_bedroom_item': 0,
+                         'is_living_room_item': 0, 'is_office_item': 0},
     'is_bird:1':        {'is_animal': 1, 'is_living': 1},
     'is_fish:1':        {'is_animal': 1, 'is_living': 1},
     'is_insect:1':      {'is_animal': 1, 'is_living': 1},
@@ -277,6 +357,21 @@ class ThingEngine {
     'is_city:1':        {'is_place': 1},
     'is_country:1':     {'is_place': 1},
     'is_building:1':    {'is_place': 1, 'is_manmade': 1},
+    // Pet / wild mutual exclusion
+    'is_pet:1':         {'is_wild_animal': 0},
+    'is_wild_animal:1': {'is_pet': 0},
+    'is_farm_animal:1': {'is_wild_animal': 0},
+    // Dog / cat species chains
+    'is_dog:1':         {'is_mammal': 1, 'is_animal': 1, 'is_living': 1, 'is_cat': 0},
+    'is_cat:1':         {'is_mammal': 1, 'is_animal': 1, 'is_living': 1, 'is_dog': 0},
+    // Dog breed type chains
+    'is_herding_dog:1': {'is_dog': 1},
+    'is_guard_dog:1':   {'is_dog': 1},
+    'is_retriever_dog:1': {'is_dog': 1},
+    'is_sled_dog:1':    {'is_dog': 1},
+    'is_hunting_dog:1': {'is_dog': 1},
+    'is_toy_breed:1':   {'is_dog': 1},
+    'is_terrier:1':     {'is_dog': 1},
   };
 
   // ── Bayesian constants ────────────────────────────────────────────────────

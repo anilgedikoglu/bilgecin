@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/game_engine.dart' show AnswerType, AnswerTypeExt;
@@ -6,6 +7,30 @@ import 'result_screen.dart';
 
 // Single accent color picked from tamua.png palette (deep violet)
 const _kBtnColor = Color(0xFF7B35C0);
+
+// Soru üstü görseller — her soruda random seçilir
+const _kSoruGorselleri = [
+  'assets/tamua.png',
+  'assets/tamuaicons.png',
+  'assets/soru_gorselleri/sg1.png',
+  'assets/soru_gorselleri/sg2.png',
+  'assets/soru_gorselleri/sg3.png',
+  'assets/soru_gorselleri/sg4.png',
+  'assets/soru_gorselleri/sg5.png',
+  'assets/soru_gorselleri/sg6.png',
+  'assets/soru_gorselleri/sg7.png',
+  'assets/soru_gorselleri/sg8.png',
+  'assets/soru_gorselleri/sg9.png',
+  'assets/soru_gorselleri/sg10.png',
+  'assets/soru_gorselleri/sg11.png',
+  'assets/soru_gorselleri/sg12.png',
+  'assets/soru_gorselleri/sg13.png',
+  'assets/soru_gorselleri/sg14.png',
+  'assets/soru_gorselleri/sg15.png',
+  'assets/soru_gorselleri/sg16.png',
+  'assets/soru_gorselleri/sg17.png',
+  'assets/soru_gorselleri/sg18.png',
+];
 
 class GameScreen extends StatefulWidget {
   final UniversalEngine engine;
@@ -21,6 +46,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late Animation<Offset> _slideAnim;
   late Animation<double> _fadeAnim;
   String _currentQuestion = '';
+  String _topImage = _kSoruGorselleri[0];
+  final _rng = Random();
 
   @override
   void initState() {
@@ -38,9 +65,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _refreshQuestion() {
+    String next;
+    do {
+      next = _kSoruGorselleri[_rng.nextInt(_kSoruGorselleri.length)];
+    } while (next == _topImage && _kSoruGorselleri.length > 1);
+    debugPrint('GORSEL_SECILDI: $next  (liste boyutu: ${_kSoruGorselleri.length})');
     setState(() {
       _currentQuestion = widget.engine.currentQuestion;
       _answered = false;
+      _topImage = next;
     });
     _questionAnim.forward(from: 0);
   }
@@ -178,9 +211,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               fit: StackFit.expand,
               children: [
                 Image.asset(
-                  'assets/tamua.png',
+                  _topImage,
                   fit: BoxFit.cover,
                   alignment: Alignment.topCenter,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.red.shade900,
+                    child: Center(
+                      child: Text(_topImage,
+                          style: const TextStyle(color: Colors.white, fontSize: 11)),
+                    ),
+                  ),
                 ),
                 // Gradient: şeffaf üst → simsiyah alt
                 Container(
@@ -210,9 +250,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                         onPressed: _confirmQuit,
                       ),
                       if (kDebugMode)
-                        IconButton(
-                          icon: const Icon(Icons.bug_report_rounded, color: Colors.white38),
-                          onPressed: _showDebugPanel,
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.bug_report_rounded, color: Colors.white38),
+                              onPressed: _showDebugPanel,
+                            ),
+                            Container(
+                              color: Colors.black87,
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              child: Text(
+                                _topImage.split('/').last,
+                                style: const TextStyle(color: Colors.yellow, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),

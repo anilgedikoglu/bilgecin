@@ -47,6 +47,24 @@ flutter:
     - assets/tamuaicons.png
     - assets/tamua.png
     - assets/cin_frames/
+    - assets/soru_gorselleri/sg1.png
+    - assets/soru_gorselleri/sg2.png
+    - assets/soru_gorselleri/sg3.png
+    - assets/soru_gorselleri/sg4.png
+    - assets/soru_gorselleri/sg5.png
+    - assets/soru_gorselleri/sg6.png
+    - assets/soru_gorselleri/sg7.png
+    - assets/soru_gorselleri/sg8.png
+    - assets/soru_gorselleri/sg9.png
+    - assets/soru_gorselleri/sg10.png
+    - assets/soru_gorselleri/sg11.png
+    - assets/soru_gorselleri/sg12.png
+    - assets/soru_gorselleri/sg13.png
+    - assets/soru_gorselleri/sg14.png
+    - assets/soru_gorselleri/sg15.png
+    - assets/soru_gorselleri/sg16.png
+    - assets/soru_gorselleri/sg17.png
+    - assets/soru_gorselleri/sg18.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
