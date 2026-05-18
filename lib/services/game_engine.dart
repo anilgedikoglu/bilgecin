@@ -173,6 +173,20 @@ class GameEngine {
     'burc_aslan', 'burc_akrep', 'burc_kova', 'burc_boga', 'burc_yengec',
     'burc_balik', 'burc_koc', 'burc_ikizler', 'burc_basak', 'burc_oglak', 'burc_terazi',
     'likes_strawberry_milk', 'food_kebap', 'food_pizza', 'food_sushi',
+    // New discriminating attributes
+    'is_pop_singer', 'has_famous_song', 'car_related',
+    'had_aesthetic_surgery', 'acted_in_multiple_works', 'appeared_in_commercials',
+    'was_judge_o_ses', 'from_yali_capkini', 'has_colored_eyes',
+    // Tech / Profession / Nationality discriminators
+    'is_hacker', 'is_programmer', 'is_engineer', 'is_ceo',
+    'is_american', 'is_finnish', 'is_japanese', 'related_to_minecraft',
+    // Religion / Life events / Extra nationality
+    'is_muslim', 'is_christian', 'is_jewish',
+    'name_changed', 'was_shot', 'converted_religion',
+    'is_british', 'is_german', 'is_french', 'is_kurdish', 'is_azerbaijani',
+    // Religious / political profile
+    'is_religious_figure', 'is_imam_or_cleric', 'has_published_book',
+    'was_president', 'is_author',
   ];
 
   // ── Question texts ─────────────────────────────────────────────────────────
@@ -256,6 +270,43 @@ class GameEngine {
     'food_kebap':  'Favori yemeği kebap olabilir mi?',
     'food_pizza':  'Favori yemeği pizza olabilir mi?',
     'food_sushi':  'Favori yemeği sushi olabilir mi?',
+    // ── New discriminating questions ─────────────────────────────────────
+    'is_pop_singer':           'Bu karakter pop şarkıcısı mı?',
+    'has_famous_song':         'Bu karakterin ünlü bir şarkısı var mı?',
+    'car_related':             'Bu karakterin arabalarla bir bağlantısı var mı?',
+    'had_aesthetic_surgery':   'Bu karakter estetik ameliyat oldu mu?',
+    'acted_in_multiple_works': 'Bu karakter birden çok dizi veya filmde oynadı mı?',
+    'appeared_in_commercials': 'Bu karakter reklamlarda oynadı mı?',
+    'was_judge_o_ses':         'Bu karakter O Ses Türkiye gibi bir yarışmada jüri oldu mu?',
+    'from_yali_capkini':       'Bu karakter Yalı Çapkını dizisinden mi?',
+    'has_colored_eyes':        'Bu karakterin gözleri renkli mi (mavi, yeşil, ela)?',
+    // ── Tech / Profession / Nationality discriminators ──────────────────
+    'is_hacker':               'Bu karakter ünlü bir hacker mı?',
+    'is_programmer':           'Bu karakter bilgisayar programcısı mı?',
+    'is_engineer':             'Bu karakter mühendis mi?',
+    'is_ceo':                  'Bu karakter büyük bir şirketin patronu/CEO\'su mu?',
+    'is_american':             'Bu karakter Amerikalı mı?',
+    'is_finnish':              'Bu karakter Finlandiyalı mı?',
+    'is_japanese':             'Bu karakter Japon mu?',
+    'related_to_minecraft':    'Bu karakterin Minecraft ile bir bağlantısı var mı?',
+    // ── Religion / event / extra nationality ──────────────────────────────
+    'is_muslim':               'Bu karakter Müslüman mı?',
+    'is_christian':            'Bu karakter Hristiyan mı?',
+    'is_jewish':               'Bu karakter Yahudi mi?',
+    'name_changed':            'Bu karakter ismini hiç değiştirdi mi?',
+    'was_shot':                'Bu karakter hiç vuruldu mu?',
+    'converted_religion':      'Bu karakter din değiştirdi mi?',
+    'is_british':              'Bu karakter İngiliz mi?',
+    'is_german':               'Bu karakter Alman mı?',
+    'is_french':               'Bu karakter Fransız mı?',
+    'is_kurdish':              'Bu karakter Kürt mü?',
+    'is_azerbaijani':          'Bu karakter Azeri mi?',
+    // ── Religious / political profile ─────────────────────────────────────
+    'is_religious_figure':     'Bu karakter dini bir figür mü?',
+    'is_imam_or_cleric':       'Bu karakter imam, hoca veya din adamı mı?',
+    'has_published_book':      'Bu karakter kitap yazmış mı?',
+    'was_president':           'Bu karakter cumhurbaşkanı oldu mu?',
+    'is_author':               'Bu karakter yazar mı?',
   };
 
   // ── Attribute metadata ─────────────────────────────────────────────────────
@@ -340,6 +391,45 @@ class GameEngine {
     'food_kebap':            _AttrMeta(10, 0.35),
     'food_pizza':            _AttrMeta(10, 0.35),
     'food_sushi':            _AttrMeta(10, 0.35),
+    // ── New discriminating attributes ────────────────────────────────────
+    'is_pop_singer':            _AttrMeta(1,  0.88),
+    'has_famous_song':          _AttrMeta(9,  0.80),
+    'car_related':              _AttrMeta(9,  0.85),
+    'had_aesthetic_surgery':    _AttrMeta(4,  0.55, isPrivateLife: true),
+    'acted_in_multiple_works':  _AttrMeta(9,  0.70),
+    'appeared_in_commercials':  _AttrMeta(9,  0.65),
+    'was_judge_o_ses':          _AttrMeta(9,  0.85),
+    'from_yali_capkini':        _AttrMeta(9,  0.92),
+    'has_colored_eyes':         _AttrMeta(4,  0.75),
+    // ── Tech / Profession / Nationality discriminators ──────────────────
+    'is_hacker':                _AttrMeta(1,  0.92),  // very specific profession
+    'is_programmer':            _AttrMeta(1,  0.88),
+    'is_engineer':              _AttrMeta(1,  0.82),
+    'is_ceo':                   _AttrMeta(1,  0.85),
+    'is_american':              _AttrMeta(8,  0.85),  // nationality group
+    'is_finnish':               _AttrMeta(8,  0.95),  // very specific nationality
+    'is_japanese':              _AttrMeta(8,  0.88),
+    'related_to_minecraft':     _AttrMeta(9,  0.92),  // very specific
+    // ── Religion (own group 11) ──────────────────────────────────────────
+    'is_muslim':                _AttrMeta(11, 0.88),
+    'is_christian':             _AttrMeta(11, 0.75),
+    'is_jewish':                _AttrMeta(11, 0.90),
+    // ── Life events (group 9 specific) ───────────────────────────────────
+    'name_changed':             _AttrMeta(9,  0.85),
+    'was_shot':                 _AttrMeta(9,  0.92),
+    'converted_religion':       _AttrMeta(9,  0.90),
+    // ── Extra nationality (group 8) ──────────────────────────────────────
+    'is_british':               _AttrMeta(8,  0.85),
+    'is_german':                _AttrMeta(8,  0.88),
+    'is_french':                _AttrMeta(8,  0.88),
+    'is_kurdish':               _AttrMeta(8,  0.92),
+    'is_azerbaijani':           _AttrMeta(8,  0.95),
+    // ── Religious / political profile ────────────────────────────────────
+    'is_religious_figure':      _AttrMeta(1,  0.90),  // profession
+    'is_imam_or_cleric':        _AttrMeta(1,  0.92),  // specific profession
+    'has_published_book':       _AttrMeta(9,  0.78),  // life event/achievement
+    'was_president':            _AttrMeta(9,  0.95),  // very specific
+    'is_author':                _AttrMeta(1,  0.85),
   };
 
   // Phase-boost [group][phase]:
@@ -361,6 +451,7 @@ class GameEngine {
     [2.40, 1.10, 0.80], // 8 nationality (is_turkish) — sorulsun erken, gereksiz olunca düş
     [0.30, 0.85, 1.80], // 9 sports/awards/music specific — precision phase'de çok değerli
     [0.10, 0.40, 1.00], // 10 trivia (zodiac, food) — sadece differentiator olarak
+    [1.50, 1.40, 1.20], // 11 religion — high-IG; muslim/christian/jewish ayrımı erken sorulmalı
   ];
 
   // 5-answer probability model.
@@ -754,6 +845,21 @@ class GameEngine {
     final r = rankedCandidates;
     return r.isNotEmpty ? r.first.key : _all.first;
   }
+
+  /// Eliminate the last guess (user said "wrong") and continue asking questions.
+  /// Returns true if there are still candidates left to guess from.
+  bool eliminateAndContinue(Character wrong) {
+    _candidates.removeWhere((c) => c.name == wrong.name);
+    _wrongGuesses.add(wrong.name);
+    // Reset to ask more questions; pick a new attribute
+    if (_candidates.isNotEmpty) {
+      _currentAttribute = _selectBestQuestion();
+    }
+    return _candidates.isNotEmpty;
+  }
+
+  final Set<String> _wrongGuesses = {};
+  Set<String> get wrongGuesses => Set.unmodifiable(_wrongGuesses);
 
   double get confidence {
     final r = rankedCandidates;

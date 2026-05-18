@@ -194,4 +194,17 @@ class UniversalEngine {
   }
 
   bool get isRouting => _inRouter;
+
+  /// User said "you guessed wrong" — eliminate the current best guess and
+  /// continue the session so the engine can ask more questions.
+  /// Returns true if there are still candidates left to try.
+  bool eliminateAndContinue() {
+    if (_gameEngine != null) {
+      return _gameEngine!.eliminateAndContinue(_gameEngine!.bestGuess);
+    }
+    if (_thingEngine != null) {
+      return _thingEngine!.eliminateAndContinue(_thingEngine!.bestGuess);
+    }
+    return false;
+  }
 }

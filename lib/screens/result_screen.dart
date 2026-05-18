@@ -3,6 +3,9 @@ import '../services/universal_engine.dart';
 import '../models/any_result.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
+import 'game_screen.dart';
+
+enum _GuessStage { askingCorrect, correct, askingContinue, exhausted }
 
 class ResultScreen extends StatefulWidget {
   final UniversalEngine engine;
@@ -17,6 +20,7 @@ class _ResultScreenState extends State<ResultScreen>
   late AnimationController _revealCtrl;
   late Animation<double> _scaleAnim;
   late Animation<double> _fadeAnim;
+  _GuessStage _stage = _GuessStage.askingCorrect;
 
   @override
   void initState() {
@@ -34,6 +38,29 @@ class _ResultScreenState extends State<ResultScreen>
   void dispose() {
     _revealCtrl.dispose();
     super.dispose();
+  }
+
+  void _onCorrect() {
+    setState(() => _stage = _GuessStage.correct);
+  }
+
+  void _onWrong() {
+    setState(() => _stage = _GuessStage.askingContinue);
+  }
+
+  void _onContinue() {
+    final hasMore = widget.engine.eliminateAndContinue();
+    if (!hasMore) {
+      setState(() => _stage = _GuessStage.exhausted);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, a, b) => GameScreen(engine: widget.engine),
+        transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
   }
 
   void _playAgain() {
@@ -118,12 +145,9 @@ class _ResultScreenState extends State<ResultScreen>
                   ),
                 ),
               ),
-              Expanded(
-                flex: 1,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                  child: _buildNewGuessButton(),
-                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+                child: _buildBottomArea(),
               ),
             ],
           ),
@@ -269,23 +293,140 @@ class _ResultScreenState extends State<ResultScreen>
     );
   }
 
-  Widget _buildNewGuessButton() {
-    return Center(
-      child: SizedBox(
-        width: double.infinity,
-        height: 56,
-        child: FilledButton.icon(
-          onPressed: _playAgain,
-          style: FilledButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+  Widget _buildBottomArea() {
+    switch (_stage) {
+      case _GuessStage.askingCorrect:
+        return _buildYesNoPrompt(
+          prompt: 'Tahminim doğru mu?',
+          onYes: _onCorrect,
+          onNo:  _onWrong,
+        );
+      case _GuessStage.askingContinue:
+        return _buildYesNoPrompt(
+          prompt: 'Devam edelim mi?',
+          onYes: _onContinue,
+          onNo:  _playAgain,
+        );
+      case _GuessStage.correct:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Bildim! 🎉',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            _buildNewGuessButton(),
+          ],
+        );
+      case _GuessStage.exhausted:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Pes ediyorum, bilemedim 😅',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            _buildNewGuessButton(),
+          ],
+        );
+    }
+  }
+
+  Widget _buildYesNoPrompt({
+    required String prompt,
+    required VoidCallback onYes,
+    required VoidCallback onNo,
+  }) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            prompt,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          icon: const Icon(Icons.auto_awesome_rounded, size: 22),
-          label: const Text(
-            'YENİ TAHMİN',
-            style: TextStyle(fontSize: 17, letterSpacing: 2, fontWeight: FontWeight.w800),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: onYes,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF22C55E),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  icon: const Icon(Icons.check_rounded, size: 24),
+                  label: const Text(
+                    'EVET',
+                    style: TextStyle(fontSize: 16, letterSpacing: 2, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: onNo,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 24),
+                  label: const Text(
+                    'HAYIR',
+                    style: TextStyle(fontSize: 16, letterSpacing: 2, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNewGuessButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: FilledButton.icon(
+        onPressed: _playAgain,
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+        ),
+        icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+        label: const Text(
+          'YENİ TAHMİN',
+          style: TextStyle(fontSize: 15, letterSpacing: 2, fontWeight: FontWeight.w800),
         ),
       ),
     );

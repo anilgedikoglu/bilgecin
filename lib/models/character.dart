@@ -51,6 +51,43 @@ class Character {
   final int isBald;
   final int hasTattoo;
   final int knownFor80s;
+  // New columns (col 51–59) — discriminating attributes
+  final int isPopSinger;
+  final int hasFamousSong;
+  final int carRelated;
+  final int hadAestheticSurgery;
+  final int actedInMultipleWorks;
+  final int appearedInCommercials;
+  final int wasJudgeOSes;
+  final int fromYaliCapkini;
+  final int hasColoredEyes;
+  // New columns (col 60–67) — profession/tech/nationality discriminators
+  final int isHacker;
+  final int isProgrammer;
+  final int isEngineer;
+  final int isCeo;
+  final int isAmerican;
+  final int isFinnish;
+  final int isJapanese;
+  final int relatedToMinecraft;
+  // New columns (col 68–78) — religion / event / extra nationality
+  final int isMuslim;
+  final int isChristian;
+  final int isJewish;
+  final int nameChanged;
+  final int wasShot;
+  final int convertedReligion;
+  final int isBritish;
+  final int isGerman;
+  final int isFrench;
+  final int isKurdish;
+  final int isAzerbaijani;
+  // New columns (col 79–83) — religious/political profile
+  final int isReligiousFigure;
+  final int isImamOrCleric;
+  final int hasPublishedBook;
+  final int wasPresident;
+  final int isAuthor;
 
   const Character({
     required this.name,
@@ -104,6 +141,39 @@ class Character {
     this.isBald                  = 0,
     this.hasTattoo               = 0,
     this.knownFor80s             = 0,
+    this.isPopSinger             = 0,
+    this.hasFamousSong           = 0,
+    this.carRelated              = 0,
+    this.hadAestheticSurgery     = 0,
+    this.actedInMultipleWorks    = 0,
+    this.appearedInCommercials   = 0,
+    this.wasJudgeOSes            = 0,
+    this.fromYaliCapkini         = 0,
+    this.hasColoredEyes          = 0,
+    this.isHacker                = 0,
+    this.isProgrammer            = 0,
+    this.isEngineer              = 0,
+    this.isCeo                   = 0,
+    this.isAmerican              = 0,
+    this.isFinnish               = 0,
+    this.isJapanese              = 0,
+    this.relatedToMinecraft      = 0,
+    this.isMuslim                = 0,
+    this.isChristian             = 0,
+    this.isJewish                = 0,
+    this.nameChanged             = 0,
+    this.wasShot                 = 0,
+    this.convertedReligion       = 0,
+    this.isBritish               = 0,
+    this.isGerman                = 0,
+    this.isFrench                = 0,
+    this.isKurdish               = 0,
+    this.isAzerbaijani           = 0,
+    this.isReligiousFigure       = 0,
+    this.isImamOrCleric          = 0,
+    this.hasPublishedBook        = 0,
+    this.wasPresident            = 0,
+    this.isAuthor                = 0,
   });
 
   int getAttribute(String attr) {
@@ -149,6 +219,43 @@ class Character {
       case 'is_bald':               return isBald;
       case 'has_tattoo':            return hasTattoo;
       case 'known_for_80s':         return knownFor80s;
+      // ── New discriminating attributes ────────────────────────────────────
+      case 'is_pop_singer':            return isPopSinger;
+      case 'has_famous_song':          return hasFamousSong;
+      case 'car_related':              return carRelated;
+      case 'had_aesthetic_surgery':    return hadAestheticSurgery;
+      case 'acted_in_multiple_works':  return actedInMultipleWorks;
+      case 'appeared_in_commercials':  return appearedInCommercials;
+      case 'was_judge_o_ses':          return wasJudgeOSes;
+      case 'from_yali_capkini':        return fromYaliCapkini;
+      case 'has_colored_eyes':         return hasColoredEyes;
+      // ── Tech/Profession/Nationality discriminators ───────────────────────
+      case 'is_hacker':                return isHacker;
+      case 'is_programmer':            return isProgrammer;
+      case 'is_engineer':              return isEngineer;
+      case 'is_ceo':                   return isCeo;
+      case 'is_american':              return isAmerican;
+      case 'is_finnish':               return isFinnish;
+      case 'is_japanese':              return isJapanese;
+      case 'related_to_minecraft':     return relatedToMinecraft;
+      // ── Religion / event / extra nationality ─────────────────────────────
+      case 'is_muslim':                return isMuslim;
+      case 'is_christian':             return isChristian;
+      case 'is_jewish':                return isJewish;
+      case 'name_changed':             return nameChanged;
+      case 'was_shot':                 return wasShot;
+      case 'converted_religion':       return convertedReligion;
+      case 'is_british':               return isBritish;
+      case 'is_german':                return isGerman;
+      case 'is_french':                return isFrench;
+      case 'is_kurdish':               return isKurdish;
+      case 'is_azerbaijani':           return isAzerbaijani;
+      // ── Religious / political profile ────────────────────────────────────
+      case 'is_religious_figure':      return isReligiousFigure;
+      case 'is_imam_or_cleric':        return isImamOrCleric;
+      case 'has_published_book':       return hasPublishedBook;
+      case 'was_president':            return wasPresident;
+      case 'is_author':                return isAuthor;
       // ── Threshold / derived ───────────────────────────────────────────────
       case 'age_under_25':          return age > 0 && age < 25 ? 1 : 0;
       case 'age_under_35':          return age > 0 && age < 35 ? 1 : 0;
@@ -248,6 +355,39 @@ class Character {
       isBald:                  row.length > 48 ? _parseInt(row[48]) : 0,
       hasTattoo:               row.length > 49 ? _parseInt(row[49]) : 0,
       knownFor80s:             row.length > 50 ? _parseInt(row[50]) : 0,
+      isPopSinger:             row.length > 51 ? _parseInt(row[51]) : 0,
+      hasFamousSong:           row.length > 52 ? _parseInt(row[52]) : 0,
+      carRelated:              row.length > 53 ? _parseInt(row[53]) : 0,
+      hadAestheticSurgery:     row.length > 54 ? _parseInt(row[54]) : 0,
+      actedInMultipleWorks:    row.length > 55 ? _parseInt(row[55]) : 0,
+      appearedInCommercials:   row.length > 56 ? _parseInt(row[56]) : 0,
+      wasJudgeOSes:            row.length > 57 ? _parseInt(row[57]) : 0,
+      fromYaliCapkini:         row.length > 58 ? _parseInt(row[58]) : 0,
+      hasColoredEyes:          row.length > 59 ? _parseInt(row[59]) : 0,
+      isHacker:                row.length > 60 ? _parseInt(row[60]) : 0,
+      isProgrammer:            row.length > 61 ? _parseInt(row[61]) : 0,
+      isEngineer:              row.length > 62 ? _parseInt(row[62]) : 0,
+      isCeo:                   row.length > 63 ? _parseInt(row[63]) : 0,
+      isAmerican:              row.length > 64 ? _parseInt(row[64]) : 0,
+      isFinnish:               row.length > 65 ? _parseInt(row[65]) : 0,
+      isJapanese:              row.length > 66 ? _parseInt(row[66]) : 0,
+      relatedToMinecraft:      row.length > 67 ? _parseInt(row[67]) : 0,
+      isMuslim:                row.length > 68 ? _parseInt(row[68]) : 0,
+      isChristian:             row.length > 69 ? _parseInt(row[69]) : 0,
+      isJewish:                row.length > 70 ? _parseInt(row[70]) : 0,
+      nameChanged:             row.length > 71 ? _parseInt(row[71]) : 0,
+      wasShot:                 row.length > 72 ? _parseInt(row[72]) : 0,
+      convertedReligion:       row.length > 73 ? _parseInt(row[73]) : 0,
+      isBritish:               row.length > 74 ? _parseInt(row[74]) : 0,
+      isGerman:                row.length > 75 ? _parseInt(row[75]) : 0,
+      isFrench:                row.length > 76 ? _parseInt(row[76]) : 0,
+      isKurdish:               row.length > 77 ? _parseInt(row[77]) : 0,
+      isAzerbaijani:           row.length > 78 ? _parseInt(row[78]) : 0,
+      isReligiousFigure:       row.length > 79 ? _parseInt(row[79]) : 0,
+      isImamOrCleric:          row.length > 80 ? _parseInt(row[80]) : 0,
+      hasPublishedBook:        row.length > 81 ? _parseInt(row[81]) : 0,
+      wasPresident:            row.length > 82 ? _parseInt(row[82]) : 0,
+      isAuthor:                row.length > 83 ? _parseInt(row[83]) : 0,
     );
   }
 

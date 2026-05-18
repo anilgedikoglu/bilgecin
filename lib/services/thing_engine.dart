@@ -619,6 +619,19 @@ class ThingEngine {
 
   AnyResult get bestResult => bestGuess.toResult();
 
+  /// Eliminate the last guess (user said "wrong") and continue asking questions.
+  bool eliminateAndContinue(ThingEntry wrong) {
+    _candidates.removeWhere((c) => c.name == wrong.name);
+    _wrongGuesses.add(wrong.name);
+    if (_candidates.isNotEmpty) {
+      _currentAttribute = _selectBestQuestion();
+    }
+    return _candidates.isNotEmpty;
+  }
+
+  final Set<String> _wrongGuesses = {};
+  Set<String> get wrongGuesses => Set.unmodifiable(_wrongGuesses);
+
   List<ThingEntry> get top5 =>
       rankedCandidates.take(5).map((e) => e.key).toList();
 
