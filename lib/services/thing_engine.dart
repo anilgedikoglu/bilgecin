@@ -289,7 +289,7 @@ class ThingEngine {
     'is_living:1':      {'is_manmade': 0, 'is_abstract': 0, 'is_digital': 0,
                          'is_vehicle': 0, 'is_tool': 0, 'is_furniture': 0,
                          'is_electric': 0, 'is_motorized': 0},
-    'is_living:0':      {'is_animal': 0, 'is_plant': 0},
+    'is_living:0':      {'is_animal': 0},
     // Abstract
     'is_abstract:1':    {'is_physical': 0, 'can_be_touched': 0, 'is_handheld': 0,
                          'is_object': 0, 'is_living': 0, 'is_animal': 0,
@@ -329,12 +329,10 @@ class ThingEngine {
                          'is_animal': 0, 'is_vehicle': 0,
                          'is_used_daily': 0, 'is_outdoor_item': 0},
     // Food / drink chain
-    'is_food:1':        {'is_edible': 1, 'is_physical': 1, 'can_be_touched': 1,
-                         'is_living': 0, 'is_abstract': 0,
-                         'is_vehicle': 0, 'is_place': 0},
-    'is_food_or_drink:1': {'is_edible': 1, 'is_physical': 1, 'can_be_touched': 1,
-                           'is_living': 0, 'is_abstract': 0,
-                           'is_vehicle': 0, 'is_place': 0},
+    'is_food:1':        {'is_edible': 1,
+                         'is_abstract': 0, 'is_vehicle': 0, 'is_place': 0},
+    'is_food_or_drink:1': {'is_edible': 1,
+                           'is_abstract': 0, 'is_vehicle': 0, 'is_place': 0},
     // Object
     'is_object:1':      {'is_physical': 1, 'can_be_touched': 1,
                          'is_abstract': 0, 'is_place': 0},
